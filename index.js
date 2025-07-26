@@ -1,10 +1,41 @@
 // Simple script to fetch Automower data using Automower Connect API
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import os from 'node:os';
+
 const API_KEY = process.env.HQ_API_KEY;
 const API_SECRET = process.env.HQ_API_SECRET;
+
+const CONFIG_DIR = path.join(os.homedir(), '.config', 'autoplanner');
+const TOKEN_FILE = path.join(CONFIG_DIR, 'access_token.json');
 
 if (!API_KEY || !API_SECRET) {
   console.error('HQ_API_KEY and HQ_API_SECRET must be provided as environment variables');
   process.exit(1);
+}
+
+async function loadStoredToken() {
+  try {
+    const raw = await fs.readFile(TOKEN_FILE, 'utf-8');
+    const data = JSON.parse(raw);
+    if (data.access_token && data.expires_at && new Date() < new Date(data.expires_at)) {
+      return data.access_token;
+    }
+  } catch {
+    // ignore errors (file may not exist or invalid JSON)
+  }
+  return null;
+}
+
+async function saveToken(accessToken, expiresIn) {
+  await fs.mkdir(CONFIG_DIR, { recursive: true, mode: 0o700 });
+  const expiresAt = new Date(Date.now() + expiresIn * 1000).toISOString();
+  const contents = {
+    access_token: accessToken,
+    expires_at: expiresAt
+  };
+  await fs.writeFile(TOKEN_FILE, JSON.stringify(contents, null, 2), { mode: 0o600 });
+  await fs.chmod(TOKEN_FILE, 0o600);
 }
 
 async function getAccessToken() {
@@ -27,6 +58,7 @@ async function getAccessToken() {
   }
 
   const data = await response.json();
+  await saveToken(data.access_token, data.expires_in);
   return data.access_token;
 }
 
@@ -38,6 +70,12 @@ async function getMowerData(accessToken) {
       'X-Api-Key': API_KEY
     }
   });
+
+  if (response.status === 401 || response.status === 403) {
+    const err = new Error('Unauthorized');
+    err.status = response.status;
+    throw err;
+  }
 
   if (!response.ok) {
     throw new Error(`Failed to fetch mowers: ${response.status} ${response.statusText}`);
@@ -62,8 +100,23 @@ function printMowerInfo(mowers) {
 
 async function main() {
   try {
-    const token = await getAccessToken();
-    const mowers = await getMowerData(token);
+    let token = await loadStoredToken();
+    if (!token) {
+      token = await getAccessToken();
+    }
+
+    let mowers;
+    try {
+      mowers = await getMowerData(token);
+    } catch (err) {
+      if (err.status === 401 || err.status === 403) {
+        token = await getAccessToken();
+        mowers = await getMowerData(token);
+      } else {
+        throw err;
+      }
+    }
+
     printMowerInfo(mowers);
   } catch (err) {
     console.error(err);
