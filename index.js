@@ -3,16 +3,36 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 
-const API_KEY = process.env.HQ_API_KEY;
-const API_SECRET = process.env.HQ_API_SECRET;
+let API_KEY;
+let API_SECRET;
 
 const CONFIG_DIR = path.join(os.homedir(), '.config', 'autoplanner');
 const TOKEN_FILE = path.join(CONFIG_DIR, 'access_token.json');
+const CREDENTIALS_FILE = path.join(CONFIG_DIR, 'credentials.json');
 
-if (!API_KEY || !API_SECRET) {
-  console.error('HQ_API_KEY and HQ_API_SECRET must be provided as environment variables');
-  process.exit(1);
+async function loadCredentials() {
+  try {
+    const raw = await fs.readFile(CREDENTIALS_FILE, 'utf-8');
+    const data = JSON.parse(raw);
+    if (data['api-key'] && data['api-secret']) {
+      return { apiKey: data['api-key'], apiSecret: data['api-secret'] };
+    }
+  } catch {
+    // ignore errors (file may not exist or invalid JSON)
+  }
+  return { apiKey: process.env.HQ_API_KEY, apiSecret: process.env.HQ_API_SECRET };
 }
+
+async function saveCredentials(apiKey, apiSecret) {
+  await fs.mkdir(CONFIG_DIR, { recursive: true, mode: 0o700 });
+  const contents = {
+    'api-key': apiKey,
+    'api-secret': apiSecret
+  };
+  await fs.writeFile(CREDENTIALS_FILE, JSON.stringify(contents, null, 2), { mode: 0o600 });
+  await fs.chmod(CREDENTIALS_FILE, 0o600);
+}
+
 
 async function loadStoredToken() {
   try {
@@ -59,6 +79,7 @@ async function getAccessToken() {
 
   const data = await response.json();
   await saveToken(data.access_token, data.expires_in);
+  await saveCredentials(API_KEY, API_SECRET);
   return data.access_token;
 }
 
@@ -101,6 +122,12 @@ function printMowerInfo(mowers) {
 
 async function main() {
   try {
+    ({ apiKey: API_KEY, apiSecret: API_SECRET } = await loadCredentials());
+    if (!API_KEY || !API_SECRET) {
+      console.error('HQ_API_KEY and HQ_API_SECRET must be provided as environment variables or credentials file');
+      process.exit(1);
+    }
+
     let token = await loadStoredToken();
     if (!token) {
       token = await getAccessToken();
