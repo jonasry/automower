@@ -5,7 +5,14 @@ This repository contains a simple Node.js script to fetch your Husqvarna Automow
 ## Requirements
 
 - Node.js 18+ (uses the built-in `fetch` API).
-- Environment variables `HQ_API_KEY` and `HQ_API_SECRET` with your API credentials.
+- API credentials either provided via environment variables `HQ_API_KEY` and `HQ_API_SECRET` or stored in `$HOME/.config/autoplanner/credentials.json` with the following structure:
+
+  ```json
+  {
+    "api-key": "<your api key>",
+    "api-secret": "<your api secret>"
+  }
+  ```
 
 ## Usage
 
@@ -24,3 +31,7 @@ After a successful authentication, the script stores the received access token i
 its expiration timestamp so that subsequent runs can reuse the token until it
 expires. The file is created with owner-only permissions to keep the token
 private.
+
+The credentials file is likewise updated with the API key and secret that were
+used for authentication so that future runs can reuse them without setting
+environment variables.
