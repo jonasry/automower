@@ -106,6 +106,13 @@ async function getMowerData(accessToken) {
   return data;
 }
 
+function batteryBar(percent, bars = 6) {
+  const filledBars = Math.floor((percent / 100) * bars);
+  const filled = '🟩'.repeat(filledBars);
+  const empty = '⬜️'.repeat(bars - filledBars);
+  return `Battery: ${filled}${empty} ${percent}%`;
+}
+
 function printMowerInfo(mowers) {
   if (!Array.isArray(mowers.data)) {
     console.log('No mower data received');
@@ -116,7 +123,7 @@ function printMowerInfo(mowers) {
     const model = item.attributes?.system?.model;
     const activity = item.attributes?.mower?.activity;
     const battery = item.attributes?.battery?.batteryPercent;
-    console.log(`${name} (${model}): ${activity} (${battery}%)`);
+    console.log(`${name} (${model}): ${activity} (${batteryBar(battery)})`);
   });
 }
 
