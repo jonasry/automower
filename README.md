@@ -16,3 +16,11 @@ npm start
 ```
 
 The script outputs each mower name, model and current activity.
+
+### Access Token Persistence
+
+After a successful authentication, the script stores the received access token in
+`$HOME/.config/autoplanner/access_token.json`. The file includes the token and
+its expiration timestamp so that subsequent runs can reuse the token until it
+expires. The file is created with owner-only permissions to keep the token
+private.
