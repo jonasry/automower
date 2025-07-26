@@ -94,7 +94,8 @@ function printMowerInfo(mowers) {
     const name = item.attributes?.system?.name;
     const model = item.attributes?.system?.model;
     const activity = item.attributes?.mower?.activity;
-    console.log(`${name} (${model}): ${activity}`);
+    const battery = item.attributes?.battery?.batteryPercent;
+    console.log(`${name} (${model}): ${activity} (${battery}%)`);
   });
 }
 
