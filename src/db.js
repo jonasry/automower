@@ -1,9 +1,12 @@
 import Database from 'better-sqlite3';
+import fs from 'node:fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const dbPath = path.join(__dirname, '../db/mower-data.sqlite');
+const dbDir = path.join(__dirname, '../db');
+await fs.mkdir(dbDir, { recursive: true });
+const dbPath = path.join(dbDir, 'mower-data.sqlite');
 
 const db = new Database(dbPath);
 
