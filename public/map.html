@@ -20,19 +20,32 @@
       maxZoom: 20
     }).addTo(map);
 
-    fetch('/api/positions')
-      .then(res => res.json())
-      .then(data => {
-        const heat = L.heatLayer(data, {
-          radius: 10,
-          blur: 8,
-          maxZoom: 20,
-        }).addTo(map);
-        
-        const latLngs = data.map(p => L.latLng(p[0], p[1]));
-        const bounds = L.latLngBounds(latLngs);
-        map.fitBounds(bounds);
-      });
+    let heatLayer = null;
+
+    function loadHeatmap() {
+        fetch('/api/positions')
+            .then(res => res.json())
+            .then(data => {
+                if (heatLayer) {
+                    map.removeLayer(heatLayer);
+                }
+                const heat = L.heatLayer(data, {
+                radius: 10,
+                blur: 7,
+                maxZoom: 20,
+                }).addTo(map);
+                
+                if (!map._boundsFitted) {
+                    const latLngs = data.map(p => L.latLng(p[0], p[1]));
+                    const bounds = L.latLngBounds(latLngs);
+                    map.fitBounds(bounds);
+                    map._boundsFitted = true;
+                }
+            });
+    }
+
+    loadHeatmap();
+    setInterval(loadHeatmap, 60000);
   </script>
 </body>
 </html>
