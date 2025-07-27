@@ -2,6 +2,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
+import WebSocket from 'ws';
 
 let API_KEY;
 let API_SECRET;
@@ -153,6 +154,30 @@ async function main() {
     }
 
     printMowerInfo(mowers);
+
+    const wss = new WebSocket('wss://ws.openapi.husqvarna.dev/v1', {
+      headers: {
+          Authorization: `Bearer ${token}`
+      }
+    });
+
+    wss.on('message', function incoming(data) {
+      if (data.length) {
+        try {
+          const text = data.toString();
+          const json = JSON.parse(text);
+          console.log('Received:', json);
+        } catch (err) {
+          console.error('Failed to parse message:', err);
+        }
+      }
+    });
+
+    // Ping server - to keep alive
+    setInterval(function() { 
+      wss.send('ping');
+    }, 60000);
+
   } catch (err) {
     console.error(err);
     process.exit(1);
