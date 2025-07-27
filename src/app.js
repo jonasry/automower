@@ -1,5 +1,6 @@
 import { startHttpServer } from './server.js';
 import { startWebSocket } from './amconnect.js';
+import { mowerStates } from './state.js';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
@@ -59,6 +60,43 @@ async function getAccessToken(apiKey, apiSecret) {
   return data.access_token;
 }
 
+async function getMowerData(accessToken, apiKey) {
+  const response = await fetch('https://api.amc.husqvarna.dev/v1/mowers', {
+    headers: {
+      'Authorization-Provider': 'husqvarna',
+      'Authorization': `Bearer ${accessToken}`,
+      'X-Api-Key': apiKey
+    }
+  });
+
+  if (response.status === 401 || response.status === 403) {
+    const err = new Error('Unauthorized');
+    err.status = response.status;
+    throw err;
+  }
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch mowers: ${response.status} ${response.statusText}`);
+  }
+
+  const data = await response.json();
+  return data;
+}
+
+async function loadMowerState(token, apiKey) {
+  try {
+    const initialData = await getMowerData(token, apiKey);
+    for (const mower of initialData.data ?? []) {
+      const id = mower.id;
+      const activity = mower.attributes?.mower?.activity ?? 'UNKNOWN';
+      mowerStates.set(id, { activity, timestamp: new Date() });
+    }
+    console.log('✅ Initial mower state populated');
+  } catch (err) {
+    console.warn('⚠️ Failed to fetch initial mower state:', err);
+  }
+}
+
 (async function main() {
   const { apiKey, apiSecret } = await loadCredentials();
   if (!apiKey || !apiSecret) {
@@ -71,6 +109,8 @@ async function getAccessToken(apiKey, apiSecret) {
     token = await getAccessToken(apiKey, apiSecret);
   }
 
-  startHttpServer();
+  await loadMowerState(token, apiKey);
+
   startWebSocket(token);
+  startHttpServer();
 })();

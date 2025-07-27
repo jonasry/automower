@@ -1,13 +1,12 @@
 import WebSocket from 'ws';
 import db from './db.js';
-
-const mowerStates = new Map();
+import { mowerStates } from './state.js';
 
 const stmt = db.prepare(
   'INSERT INTO positions (mower_id, activity, lat, lon, timestamp) VALUES (?, ?, ?, ?, ?)'
 );
 
-function storePosition(mowerId, lat, lon, timestamp, state) {
+function storePosition(mowerId, state, lat, lon, timestamp) {
   stmt.run(mowerId, state, lat, lon, timestamp);
 }
 
