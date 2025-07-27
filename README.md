@@ -1,6 +1,6 @@
 # Automower API Example
 
-This repository contains a simple Node.js script to fetch your Husqvarna Automower information using the Automower Connect API. The script authenticates using the Authentication API and prints basic mower details.
+This repository contains a small Node.js application that connects to the Husqvarna Automower Connect API and stores mower position data in a local SQLite database. It runs a web server that exposes an API endpoint and a simple heatmap page to visualise your mower's activity.
 
 ## Requirements
 
@@ -16,13 +16,13 @@ This repository contains a simple Node.js script to fetch your Husqvarna Automow
 
 ## Usage
 
-Run the script with:
+Run the server with:
 
 ```bash
 npm start
 ```
 
-The script outputs each mower name, model and current activity.
+This launches `src/app.js`, which starts an HTTP server on `http://localhost:3000`. View `public/map.html` (for example at `http://localhost:3000/map.html`) to see a heatmap of recorded mower positions.
 
 ### Access Token Persistence
 
