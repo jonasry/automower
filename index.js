@@ -3,6 +3,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import WebSocket from 'ws';
+import Database from 'better-sqlite3';
 
 let API_KEY;
 let API_SECRET;
@@ -10,6 +11,22 @@ let API_SECRET;
 const CONFIG_DIR = path.join(os.homedir(), '.config', 'autoplanner');
 const TOKEN_FILE = path.join(CONFIG_DIR, 'access_token.json');
 const CREDENTIALS_FILE = path.join(CONFIG_DIR, 'credentials.json');
+const POSITIONS_FILE = path.join(CONFIG_DIR, 'mower_positions.json');
+
+const mowerStates = new Map();
+const db = new Database('mower-data.sqlite');
+
+// Initialize table if not exists
+db.exec(`
+  CREATE TABLE IF NOT EXISTS positions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    mower_id TEXT,
+    activity TEXT,
+    lat REAL,
+    lon REAL,
+    timestamp TEXT
+  )
+`);
 
 async function loadCredentials() {
   try {
@@ -128,6 +145,43 @@ function printMowerInfo(mowers) {
   });
 }
 
+async function storePosition(mowerId, activity, lat, lon, timestamp) {
+  const stmt = db.prepare('INSERT INTO positions (mower_id, activity, lat, lon, timestamp) VALUES (?, ?, ?, ?, ?)');
+  stmt.run(mowerId, activity, lat, lon, timestamp);
+}
+
+async function handleIncomingMessage(message) {
+  if (!message.length) return;
+
+  try {
+    const json = message.toString();
+    const event = JSON.parse(json);
+    const { type, attributes, id: mowerId } = event;
+
+    if (!type || !attributes || !mowerId) return;
+
+    if (type === 'mower-event-v2') {
+      const activity = attributes?.mower?.activity;
+      if (activity) {
+        mowerStates.set(mowerId, { activity, timestamp: new Date() });
+      }
+
+    } else if (type === 'position-event-v2') {
+      const lat = attributes?.position?.latitude;
+      const lon = attributes?.position?.longitude;
+      const timestamp = attributes?.metadata?.timestamp || new Date().toISOString();
+      const state = mowerStates.get(mowerId);
+
+      if (lat != null && lon != null) {
+        await storePosition(mowerId, state?.activity ?? 'UNKNOWN', lat, lon, timestamp);
+      }
+    }
+
+  } catch (err) {
+    console.error('Failed to handle message:', err);
+  }
+}
+
 async function main() {
   try {
     ({ apiKey: API_KEY, apiSecret: API_SECRET } = await loadCredentials());
@@ -153,6 +207,15 @@ async function main() {
       }
     }
 
+    mowers.data.forEach((item) => {
+        const { id, attributes } = item;
+        const activity = attributes?.mower?.activity;
+        console.log(id, activity);
+        if (activity) {
+          mowerStates.set(id, { activity, timestamp: new Date() });
+        }      
+    });
+
     printMowerInfo(mowers);
 
     const wss = new WebSocket('wss://ws.openapi.husqvarna.dev/v1', {
@@ -161,17 +224,7 @@ async function main() {
       }
     });
 
-    wss.on('message', function incoming(data) {
-      if (data.length) {
-        try {
-          const text = data.toString();
-          const json = JSON.parse(text);
-          console.log('Received:', json);
-        } catch (err) {
-          console.error('Failed to parse message:', err);
-        }
-      }
-    });
+    wss.on('message', handleIncomingMessage);
 
     // Ping server - to keep alive
     setInterval(function() { 
