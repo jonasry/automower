@@ -11,7 +11,7 @@ app.use(express.static(path.join(__dirname, '../public')));
 
 app.get('/api/positions', (req, res) => {
   const data = getInterpolatedPositions();
-  const heat = data.map(([lat, lon]) => [lat, lon, 1]);
+  const heat = data.map(([lat, lon, weight]) => [lat, lon, weight]);
   res.json(heat);
 });
 
