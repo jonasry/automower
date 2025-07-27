@@ -17,7 +17,7 @@
     const map = L.map('map').setView([55.7, 13.2], 17); // Adjust to your lawn center
 
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19
+      maxZoom: 20
     }).addTo(map);
 
     fetch('/api/positions')
@@ -25,8 +25,8 @@
       .then(data => {
         const heat = L.heatLayer(data, {
           radius: 10,
-          blur: 15,
-          maxZoom: 18,
+          blur: 8,
+          maxZoom: 20,
         }).addTo(map);
         
         const latLngs = data.map(p => L.latLng(p[0], p[1]));
