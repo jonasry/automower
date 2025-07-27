@@ -29,11 +29,11 @@
                 if (heatLayer) {
                     map.removeLayer(heatLayer);
                 }
-                const heat = L.heatLayer(data, {
-                radius: 10,
-                blur: 7,
-                maxZoom: 20,
-                }).addTo(map);
+                heatLayer = L.heatLayer(data, {
+                    radius: 10,
+                    blur: 7,
+                    maxZoom: 20,
+                    }).addTo(map);
                 
                 if (!map._boundsFitted) {
                     const latLngs = data.map(p => L.latLng(p[0], p[1]));
