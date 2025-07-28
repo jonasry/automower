@@ -15,8 +15,15 @@ function handleIncomingEvent(data) {
 
   try {
     const text = data.toString();
-    const json = JSON.parse(text);
-    const { type, attributes, id: mowerId } = json;
+    const message = JSON.parse(text);
+
+    //console.log('message', message);
+
+    if (message.ready) {
+      console.log("🔒 Connected")
+    }
+
+    const { type, attributes, id: mowerId } = message;
     if (!type || !attributes || !mowerId) return;
 
     if (type === 'mower-event-v2') {
@@ -49,6 +56,12 @@ export function startWebSocket(token) {
   });
 
   wss.on('message', handleIncomingEvent);
+  wss.on('close', async (code, reason) => {
+    console.warn(`🔓 Disonnected: ${code} - ${reason}`);
+  });
+  wss.on('error', (err) => {
+    console.error('⚠️ Connection error:', err);
+  });
 
   setInterval(() => {
     wss.send('ping');
