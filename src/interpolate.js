@@ -23,9 +23,9 @@ function daysBetween(dateA, dateB) {
 
 function interpolateSession(points, output) {
   const first = points[0];
-  const now = Date.now();
   const ageInDays = daysBetween(new Date(first.timestamp), new Date());
-  const weight = Math.max(0, Math.min(1, 1 - (ageInDays / 7)));
+  const a = 1 + Math.max(0, Math.min(7, ageInDays));
+  const weight = Math.pow(2, -a);
 
   if (weight <= 0) return;
 
