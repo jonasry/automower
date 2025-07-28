@@ -32,6 +32,10 @@ its expiration timestamp so that subsequent runs can reuse the token until it
 expires. The file is created with owner-only permissions to keep the token
 private.
 
-The credentials file is likewise updated with the API key and secret that were
-used for authentication so that future runs can reuse them without setting
-environment variables.
+### Streaming API
+
+This application connects to the Husqvarna Automower Connect Streaming API using a WebSocket connection. When active, it receives a stream of events such as mower state updates (`mower-event-v2`) and position updates (`position-event-v2`). These events are processed in real time to maintain an up-to-date view of mower activity, which is then stored in a local SQLite database.
+
+The WebSocket connection is subject to a 2-hour timeout per the API's limitations. When the connection is closed (either due to timeout or network issues), the application detects the closure, refreshes the authentication token if necessary, and automatically re-establishes the connection. This ensures continuous data collection without manual intervention.
+
+A periodic `ping` is sent every 60 seconds to keep the connection alive. If the application is restarted, it will reuse a cached token from disk if it's still valid, or request a new one if needed.
