@@ -21,6 +21,7 @@
     }).addTo(map);
 
     let heatLayer = null;
+    let recentLayer = null;
 
     function loadHeatmap() {
         fetch('/api/positions')
@@ -44,8 +45,30 @@
             });
     }
 
+    function loadRecent() {
+        fetch('/api/recent-positions')
+            .then(res => res.json())
+            .then(points => {
+                if (recentLayer) {
+                    map.removeLayer(recentLayer);
+                }
+                recentLayer = L.layerGroup();
+                points.forEach(([lat, lon]) => {
+                    L.circleMarker([lat, lon], {
+                        radius: 3,
+                        color: 'white',
+                        weight: 1,
+                        fillColor: 'white',
+                        fillOpacity: 1
+                    }).addTo(recentLayer);
+                });
+                recentLayer.addTo(map);
+            });
+    }
+
     loadHeatmap();
-    setInterval(loadHeatmap, 60000);
+    loadRecent();
+    setInterval(() => { loadHeatmap(); loadRecent(); }, 60000);
   </script>
 </body>
 </html>
