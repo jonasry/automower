@@ -39,3 +39,22 @@ This application connects to the Husqvarna Automower Connect Streaming API using
 The WebSocket connection is subject to a 2-hour timeout per the API's limitations. When the connection is closed (either due to timeout or network issues), the application detects the closure, refreshes the authentication token if necessary, and automatically re-establishes the connection. This ensures continuous data collection without manual intervention.
 
 A periodic `ping` is sent every 60 seconds to keep the connection alive. If the application is restarted, it will reuse a cached token from disk if it's still valid, or request a new one if needed.
+
+## Docker
+
+You can build a Docker image for the application with the included `Dockerfile`:
+
+```bash
+docker build -t automower .
+```
+
+Run the container and expose port 3000:
+
+```bash
+docker run -p 3000:3000 \
+  -e HQ_API_KEY=<your api key> \
+  -e HQ_API_SECRET=<your api secret> \
+  automower
+```
+
+This will start the server inside the container and serve the application at `http://localhost:3000`.
