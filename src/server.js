@@ -16,7 +16,7 @@ app.get('/api/positions', (req, res) => {
 });
 
 app.get('/api/recent-positions', (req, res) => {
-  const rows = getRecentPositions(50);
+  const rows = getRecentPositions("MOWING", 50);
   const coords = rows.map(r => [r.lat, r.lon]);
   res.json(coords);
 });
