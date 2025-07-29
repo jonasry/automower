@@ -31,8 +31,8 @@
                     map.removeLayer(heatLayer);
                 }
                 heatLayer = L.heatLayer(data, {
-                    radius: 10,
-                    blur: 10,
+                    radius: 7,
+                    blur: 8,
                     maxZoom: 20,
                     }).addTo(map);
                 
@@ -53,6 +53,7 @@
                     map.removeLayer(recentLayer);
                 }
                 recentLayer = L.layerGroup();
+                const polylinePoints = [];
                 points.forEach(([lat, lon]) => {
                     L.circleMarker([lat, lon], {
                         radius: 3,
@@ -61,7 +62,27 @@
                         fillColor: 'white',
                         fillOpacity: 1
                     }).addTo(recentLayer);
+                    polylinePoints.push([lat, lon]);
                 });
+                if (polylinePoints.length > 1) {
+                    const dashedLine = L.polyline(polylinePoints, {
+                        color: 'white',
+                        weight: 1.25,
+                        dashArray: '6, 4',
+                        opacity: 0.7
+                    });
+                    dashedLine.addTo(recentLayer);
+
+                    const endPoint = polylinePoints[polylinePoints.length - 1];
+                    L.marker(endPoint, {
+                        icon: L.divIcon({
+                            className: 'flag-icon',
+                            html: '🏁',
+                            iconSize: [24, 24],
+                            iconAnchor: [0, 24]
+                        })
+                    }).addTo(recentLayer);
+                }
                 recentLayer.addTo(map);
             });
     }
