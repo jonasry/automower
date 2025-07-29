@@ -1,17 +1,9 @@
 import WebSocket from 'ws';
-import db from './db.js';
+import { storePosition } from './db.js';
 import { mowerStates } from './state.js';
 import { getToken } from './auth.js'
 
 let pingInterval = null;
-
-const stmt = db.prepare(
-  'INSERT INTO positions (mower_id, activity, lat, lon, timestamp) VALUES (?, ?, ?, ?, ?)'
-);
-
-function storePosition(mowerId, state, lat, lon, timestamp) {
-  stmt.run(mowerId, state, lat, lon, timestamp);
-}
 
 function handleIncomingEvent(data) {
   if (!data.length) return;
@@ -52,6 +44,8 @@ function handleIncomingEvent(data) {
 }
 
 export async function startWebSocket(apiKey, apiSecret) {
+  console.log('🔐 Connecting...');
+
   let token = await getToken(apiKey, apiSecret);
 
   const wss = new WebSocket('wss://ws.openapi.husqvarna.dev/v1', {
@@ -63,8 +57,7 @@ export async function startWebSocket(apiKey, apiSecret) {
   wss.on('message', handleIncomingEvent);
   wss.on('close', async (code, reason) => {
     console.warn(`🔓 Disconnected: ${code} - ${reason}`);
-    console.log('🔁 Reconnecting...');
-    await startWebSocket(apiKey, apiSecret); // recursive reconnect
+    await startWebSocket(apiKey, apiSecret);
   });
   wss.on('error', (err) => {
     console.error('⚠️ Connection error:', err);

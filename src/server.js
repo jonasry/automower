@@ -1,6 +1,5 @@
 import express from 'express';
 import path from 'path';
-import db from './db.js';
 import { fileURLToPath } from 'url';
 import { getInterpolatedPositions } from './interpolate.js';
 

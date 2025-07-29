@@ -1,4 +1,4 @@
-import db from './db.js';
+import { getPositions } from './db.js';
 
 function interpolatePointsTimed(lat1, lon1, lat2, lon2, totalSeconds, weight = 1, stepSeconds = 5) {
   const points = [];
@@ -58,11 +58,7 @@ function interpolateSession(points, output) {
 }
 
 function getInterpolatedPositions() {
-  const rows = db.prepare(`
-    SELECT mower_id, lat, lon, timestamp, activity
-    FROM positions
-    ORDER BY mower_id, timestamp
-  `).all();
+  const rows = getPositions();
 
   const interpolated = [];
   const grouped = new Map();

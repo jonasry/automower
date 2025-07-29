@@ -21,4 +21,23 @@ db.exec(`
   )
 `);
 
-export default db;
+const insertStmt = db.prepare(
+  'INSERT INTO positions (mower_id, activity, lat, lon, timestamp) VALUES (?, ?, ?, ?, ?)'
+);
+
+const selectStmt = db.prepare(`
+  SELECT mower_id, lat, lon, timestamp, activity
+  FROM positions
+  ORDER BY mower_id, timestamp
+  `
+);
+
+function storePosition(mowerId, state, lat, lon, timestamp) {
+  insertStmt.run(mowerId, state, lat, lon, timestamp);
+}
+
+function getPositions() {
+  return selectStmt.all();
+}
+
+export { storePosition,  getPositions };
