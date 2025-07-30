@@ -1,7 +1,8 @@
 node_modules
 npm-debug.log
 Dockerfile
-.dockerignore
-
-# local config and tokens
-.config
+.vscode
+.git
+.gitignore
+*.md
+*.sqlite

@@ -9,7 +9,11 @@ COPY package*.json ./
 RUN npm ci --omit=dev
 
 # Bundle app source
-COPY . .
+COPY src/ ./src/
+COPY public/ ./public/
+
+# Directory for the database file
+RUN mkdir ./db
 
 EXPOSE 3000
 CMD ["npm", "start"]
