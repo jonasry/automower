@@ -31,10 +31,11 @@
                     map.removeLayer(heatLayer);
                 }
                 heatLayer = L.heatLayer(data, {
-                    radius: 7,
-                    blur: 8,
+                    radius: 9,
+                    blur: 7,
                     maxZoom: 20,
-                    }).addTo(map);
+                    gradient: {1: 'LawnGreen', 0.75: 'CornflowerBlue', 0.5: 'Red'}
+                }).addTo(map);
                 
                 if (!map._boundsFitted) {
                     const latLngs = data.map(p => L.latLng(p[0], p[1]));
@@ -73,7 +74,7 @@
                     });
                     dashedLine.addTo(recentLayer);
 
-                    const endPoint = polylinePoints[polylinePoints.length - 1];
+                    const endPoint = polylinePoints[0];
                     L.marker(endPoint, {
                         icon: L.divIcon({
                             className: 'flag-icon',
