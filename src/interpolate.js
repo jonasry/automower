@@ -3,7 +3,7 @@ import { getPositions } from './db.js';
 function interpolatePointsTimed(lat1, lon1, lat2, lon2, totalDistance, weight = 1, step = 1) {
   const points = [];
   const steps = Math.floor(totalDistance / step);
-  for (let i = 0; i <= steps; i++) {
+  for (let i = 0; i < steps; i++) {
     const t = i / steps;
     points.push([
       lat1 + t * (lat2 - lat1),
@@ -53,7 +53,6 @@ function interpolateSession(points, output) {
 
     if (dist < 1) {
         output.push([a.lat, a.lon, weight]);
-        output.push([b.lat, b.lon, weight]);
 
     } else {
         const segment = interpolatePointsTimed(
@@ -67,6 +66,8 @@ function interpolateSession(points, output) {
         output.push(...segment);
     }
   }
+  const b = points[points.length - 1];
+  output.push([b.lat, b.lon, weight]);
 }
 
 function getInterpolatedPositions() {
