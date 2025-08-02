@@ -43,8 +43,8 @@
                     map.removeLayer(heatLayer);
                 }
                 heatLayer = L.heatLayer(data, {
-                    radius: 12,
-                    blur: 7,
+                    radius: 10,
+                    blur: 6,
                     maxZoom: 20,
                     gradient: defaultGradient
                 }).addTo(map);
@@ -70,17 +70,17 @@
                 points.forEach(([lat, lon]) => {
                     L.circleMarker([lat, lon], {
                         radius: 3,
-                        color: 'white',
+                        color: 'indigo',
                         weight: 1,
-                        fillColor: 'white',
+                        fillColor: 'indigo',
                         fillOpacity: 1
                     }).addTo(recentLayer);
                     polylinePoints.push([lat, lon]);
                 });
                 if (polylinePoints.length > 1) {
                     const dashedLine = L.polyline(polylinePoints, {
-                        color: 'white',
-                        weight: 1.25,
+                        color: 'indigo',
+                        weight: 2.25,
                         dashArray: '6, 4',
                         opacity: 0.7
                     });
