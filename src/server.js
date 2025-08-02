@@ -18,7 +18,6 @@ app.get('/api/positions', (req, res) => {
 app.get('/api/recent-positions', (req, res) => {
   const data = getInterpolatedPositions();
   if (!data || data.length === 0) {
-    console.log("no positions")
     return res.json([]);
   }
 
@@ -27,10 +26,9 @@ app.get('/api/recent-positions', (req, res) => {
 
   for (let i = data.length - 1; i >= 0; i--) {
     const entry = data[i];
-    console.log(entry)
     if (entry[3] !== lastSessionId) break;
     if (entry[4] === true) {
-      recentPositions.unshift([entry[0], entry[1]]);
+      recentPositions.push([entry[0], entry[1]]);
     }
   }
 
