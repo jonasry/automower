@@ -31,6 +31,6 @@ app.get('/api/positions', (req, res) => {
 
 export function startHttpServer(port = 3000) {
   app.listen(port, () => {
-    console.log(`🌍 HTTP server listening at http://localhost:${port}/public/map.html`);
+    console.log(`🌍 HTTP server listening at http://localhost:${port}/map.html`);
   });
 }

@@ -10,7 +10,7 @@ function interpolatePointsTimed(lat1, lon1, lat2, lon2, totalDistance, session_i
       lon1 + t * (lon2 - lon1),
       weight,
       session_id,
-      i == 0
+      i === 0
     ]);
   }
   return points;

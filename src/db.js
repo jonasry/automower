@@ -33,14 +33,6 @@ const selectStmt = db.prepare(`
   `
 );
 
-const recentStmt = db.prepare(
-  `SELECT mower_id, lat, lon, timestamp, activity
-   FROM positions
-   WHERE activity = ?
-   ORDER BY timestamp DESC
-   LIMIT ?`
-);
-
 function storePosition(mowerId, session_id, state, lat, lon, timestamp) {
   insertStmt.run(mowerId, session_id, state, lat, lon, timestamp);
 }
@@ -49,8 +41,4 @@ function getPositions() {
   return selectStmt.all();
 }
 
-function getRecentPositions(session_id, activity = "MOWING") {
-  return recentStmt.all(session_id, activity);
-}
-
-export { storePosition, getPositions, getRecentPositions };
+export { storePosition, getPositions };
