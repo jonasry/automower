@@ -35,39 +35,33 @@
     let heatLayer = null;
     let recentLayer = null;
 
-    function loadHeatmap() {
+    function loadData() {
         fetch('/api/positions')
             .then(res => res.json())
-            .then(data => {
+            .then(({ heat, recent }) => {
                 if (heatLayer) {
                     map.removeLayer(heatLayer);
                 }
-                heatLayer = L.heatLayer(data, {
+                heatLayer = L.heatLayer(heat, {
                     radius: 10,
                     blur: 6,
                     maxZoom: 20,
                     gradient: defaultGradient
                 }).addTo(map);
-                
+
                 if (!map._boundsFitted) {
-                    const latLngs = data.map(p => L.latLng(p[0], p[1]));
+                    const latLngs = heat.map(p => L.latLng(p[0], p[1]));
                     const bounds = L.latLngBounds(latLngs);
                     map.fitBounds(bounds);
                     map._boundsFitted = true;
                 }
-            });
-    }
 
-    function loadRecent() {
-        fetch('/api/recent-positions')
-            .then(res => res.json())
-            .then(points => {
                 if (recentLayer) {
                     map.removeLayer(recentLayer);
                 }
                 recentLayer = L.layerGroup();
                 const polylinePoints = [];
-                points.forEach(([lat, lon]) => {
+                recent.forEach(([lat, lon]) => {
                     L.circleMarker([lat, lon], {
                         radius: 3,
                         color: 'indigo',
@@ -100,9 +94,8 @@
             });
     }
 
-    loadHeatmap();
-    loadRecent();
-    setInterval(() => { loadHeatmap(); loadRecent(); }, 30000);
+    loadData();
+    setInterval(loadData, 30000);
   </script>
 </body>
 </html>

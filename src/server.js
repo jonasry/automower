@@ -2,7 +2,6 @@ import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { getInterpolatedPositions } from './interpolate.js';
-import { getRecentPositions } from './db.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -11,28 +10,23 @@ app.use(express.static(path.join(__dirname, '../public')));
 
 app.get('/api/positions', (req, res) => {
   const data = getInterpolatedPositions();
+
   const heat = data.map(([lat, lon, weight]) => [lat, lon, weight]);
-  res.json(heat);
-});
 
-app.get('/api/recent-positions', (req, res) => {
-  const data = getInterpolatedPositions();
-  if (!data || data.length === 0) {
-    return res.json([]);
-  }
+  const recent = [];
+  if (data && data.length > 0) {
+    const lastSessionId = data[data.length - 1][3];
 
-  const lastSessionId = data[data.length - 1][3];
-  const recentPositions = [];
-
-  for (let i = data.length - 1; i >= 0; i--) {
-    const entry = data[i];
-    if (entry[3] !== lastSessionId) break;
-    if (entry[4] === true) {
-      recentPositions.push([entry[0], entry[1]]);
+    for (let i = data.length - 1; i >= 0; i--) {
+      const entry = data[i];
+      if (entry[3] !== lastSessionId) break;
+      if (entry[4] === true) {
+        recent.push([entry[0], entry[1]]);
+      }
     }
   }
 
-  res.json(recentPositions);
+  res.json({ heat, recent });
 });
 
 export function startHttpServer(port = 3000) {
