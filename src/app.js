@@ -32,7 +32,7 @@ async function loadMowerState(token, apiKey) {
     for (const mower of initialData.data ?? []) {
       const id = mower.id;
       const activity = mower.attributes?.mower?.activity ?? 'UNKNOWN';
-      mowerStates.set(id, { activity, timestamp: new Date() });
+      mowerStates.set(id, { activity, timestamp: Date.now() });
     }
     console.log('✅ Initial mower state populated');
   } catch (err) {

@@ -14,6 +14,7 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS positions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     mower_id TEXT,
+    session_id INTEGER,
     activity TEXT,
     lat REAL,
     lon REAL,
@@ -22,11 +23,11 @@ db.exec(`
 `);
 
 const insertStmt = db.prepare(
-  'INSERT INTO positions (mower_id, activity, lat, lon, timestamp) VALUES (?, ?, ?, ?, ?)'
+  'INSERT INTO positions (mower_id, session_id, activity, lat, lon, timestamp) VALUES (?, ?, ?, ?, ?, ?)'
 );
 
 const selectStmt = db.prepare(`
-  SELECT mower_id, lat, lon, timestamp, activity
+  SELECT mower_id, session_id, lat, lon, timestamp, activity
   FROM positions
   ORDER BY mower_id, timestamp
   `
@@ -40,16 +41,16 @@ const recentStmt = db.prepare(
    LIMIT ?`
 );
 
-function storePosition(mowerId, state, lat, lon, timestamp) {
-  insertStmt.run(mowerId, state, lat, lon, timestamp);
+function storePosition(mowerId, session_id, state, lat, lon, timestamp) {
+  insertStmt.run(mowerId, session_id, state, lat, lon, timestamp);
 }
 
 function getPositions() {
   return selectStmt.all();
 }
 
-function getRecentPositions(activity = "MOWING", limit = 50) {
-  return recentStmt.all(activity, limit);
+function getRecentPositions(session_id, activity = "MOWING") {
+  return recentStmt.all(session_id, activity);
 }
 
 export { storePosition, getPositions, getRecentPositions };

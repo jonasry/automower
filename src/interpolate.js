@@ -1,6 +1,6 @@
 import { getPositions } from './db.js';
 
-function interpolatePointsTimed(lat1, lon1, lat2, lon2, totalDistance, weight = 1, step = 1) {
+function interpolatePointsTimed(lat1, lon1, lat2, lon2, totalDistance, session_id, weight = 1, step = 1) {
   const points = [];
   const steps = Math.floor(totalDistance / step);
   for (let i = 0; i < steps; i++) {
@@ -8,7 +8,9 @@ function interpolatePointsTimed(lat1, lon1, lat2, lon2, totalDistance, weight = 
     points.push([
       lat1 + t * (lat2 - lat1),
       lon1 + t * (lon2 - lon1),
-      weight
+      weight,
+      session_id,
+      i == 0
     ]);
   }
   return points;
@@ -37,7 +39,7 @@ function haversineDistance(a, b) {
     return R * d;
 }
 
-function interpolateSession(points, output) {
+function interpolateSession(points, output, session_id) {
   const first = points[0];
   const ageInDays = daysBetween(new Date(first.timestamp), new Date());
   const a = 1 + Math.max(0, Math.min(7, ageInDays));
@@ -52,13 +54,14 @@ function interpolateSession(points, output) {
     if (!isFinite(dist)) continue;
 
     if (dist < 1) {
-        output.push([a.lat, a.lon, weight]);
+        output.push([a.lat, a.lon, weight, session_id, true]);
 
     } else {
         const segment = interpolatePointsTimed(
             a.lat, a.lon,
             b.lat, b.lon,
             dist,
+            session_id,
             weight,
             0.5 // step size
         );
@@ -67,7 +70,7 @@ function interpolateSession(points, output) {
     }
   }
   const b = points[points.length - 1];
-  output.push([b.lat, b.lon, weight]);
+  output.push([b.lat, b.lon, weight, session_id, true]);
 }
 
 function getInterpolatedPositions() {
@@ -75,6 +78,8 @@ function getInterpolatedPositions() {
 
   const interpolated = [];
   const grouped = new Map();
+
+  let session_id = 0
 
   // Group rows by mower ID
   rows.forEach(row => {
@@ -84,23 +89,29 @@ function getInterpolatedPositions() {
 
   for (const [mowerId, points] of grouped.entries()) {
     let session = [];
+    
+    session_id = points[0]?.session_id ?? 0;
 
     for (let i = 0; i < points.length; i++) {
       const curr = points[i];
 
-      if (curr.activity === 'MOWING') {
-        session.push(curr);
+      if (curr.session_id == session_id) {
+        if (curr.activity === 'MOWING') {
+            session.push(curr);
+        }
       } else if (session.length > 1) {
         // Process session when interrupted
-        interpolateSession(session, interpolated);
+        interpolateSession(session, interpolated, session_id);
         session = [];
+        session_id = curr.session_id;
       } else {
         session = [];
+        session_id = curr.session_id;
       }
     }
 
     if (session.length > 1) {
-      interpolateSession(session, interpolated);
+      interpolateSession(session, interpolated, session_id);
     }
   }
 

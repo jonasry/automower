@@ -16,9 +16,25 @@ app.get('/api/positions', (req, res) => {
 });
 
 app.get('/api/recent-positions', (req, res) => {
-  const rows = getRecentPositions("MOWING", 50);
-  const coords = rows.map(r => [r.lat, r.lon]);
-  res.json(coords);
+  const data = getInterpolatedPositions();
+  if (!data || data.length === 0) {
+    console.log("no positions")
+    return res.json([]);
+  }
+
+  const lastSessionId = data[data.length - 1][3];
+  const recentPositions = [];
+
+  for (let i = data.length - 1; i >= 0; i--) {
+    const entry = data[i];
+    console.log(entry)
+    if (entry[3] !== lastSessionId) break;
+    if (entry[4] === true) {
+      recentPositions.unshift([entry[0], entry[1]]);
+    }
+  }
+
+  res.json(recentPositions);
 });
 
 export function startHttpServer(port = 3000) {

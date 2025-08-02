@@ -23,8 +23,13 @@ function handleIncomingEvent(data) {
 
     if (type === 'mower-event-v2') {
       const activity = attributes?.mower?.activity;
+      const currentState = mowerStates.get(mowerId);
       if (activity) {
-        mowerStates.set(mowerId, { activity, timestamp: new Date() });
+        if (activity != currentState?.activity) {
+          const timestamp = Date.now();
+          console.log(`📍 Activity changed for ${mowerId}: ${currentState?.activity ?? 'none'} → ${activity} at ${new Date(timestamp).toISOString()}`);
+          mowerStates.set(mowerId, { activity, timestamp: timestamp });
+        }
       }
 
     } else if (type === 'position-event-v2') {
@@ -34,7 +39,7 @@ function handleIncomingEvent(data) {
       const state = mowerStates.get(mowerId);
 
       if (lat != null && lon != null) {
-        storePosition(mowerId, state?.activity ?? 'UNKNOWN', lat, lon, timestamp);
+        storePosition(mowerId, state?.timestamp ?? 0, state?.activity ?? 'UNKNOWN', lat, lon, timestamp);
       }
     }
 
