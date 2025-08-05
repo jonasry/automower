@@ -22,7 +22,6 @@ async function loadStoredToken() {
     const raw = await fs.readFile(TOKEN_FILE, 'utf-8');
     const data = JSON.parse(raw);
     if (data.access_token && data.expires_at && new Date() < new Date(data.expires_at)) {
-      console.log("📨 Using cached token")
       return data.access_token;
     }
   } catch {}
@@ -54,7 +53,7 @@ async function getNewAccessToken(apiKey, apiSecret) {
 
   if (!response.ok) throw new Error(`Auth failed: ${response.status} ${response.statusText}`);
 
-  console.log("✉️ Got a new access token")
+  console.log("🔑 Got a new access token")
 
   const data = await response.json();
   await saveToken(data.access_token, data.expires_in);
