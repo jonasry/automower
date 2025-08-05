@@ -43,8 +43,8 @@
                     map.removeLayer(heatLayer);
                 }
                 heatLayer = L.heatLayer(heat, {
-                    radius: 10,
-                    blur: 6,
+                    radius: 8,
+                    blur: 5,
                     maxZoom: 20,
                     gradient: defaultGradient
                 }).addTo(map);
@@ -80,13 +80,22 @@
                     });
                     dashedLine.addTo(recentLayer);
 
+                    const startPoint = polylinePoints[polylinePoints.length - 1];
                     const endPoint = polylinePoints[0];
+                    L.marker(startPoint, {
+                        icon: L.divIcon({
+                            className: 'flag-icon',
+                            html: '🟡',
+                            iconSize: [24, 24],
+                            iconAnchor: [0, 12]
+                        })
+                    }).addTo(recentLayer);
                     L.marker(endPoint, {
                         icon: L.divIcon({
                             className: 'flag-icon',
-                            html: '🏁',
+                            html: '🟢',
                             iconSize: [24, 24],
-                            iconAnchor: [0, 24]
+                            iconAnchor: [0, 12]
                         })
                     }).addTo(recentLayer);
                 }
