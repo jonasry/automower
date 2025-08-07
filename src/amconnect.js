@@ -2,6 +2,7 @@ import WebSocket from 'ws';
 import { storePosition } from './db.js';
 import { mowerStates } from './state.js';
 import { getToken } from './auth.js'
+import { messageDescriptions, severitySymbols } from './amcmessages.js'
 
 let pingInterval = null;
 
@@ -41,6 +42,18 @@ function handleIncomingEvent(data) {
       if (lat != null && lon != null) {
         storePosition(mowerId, state?.timestamp ?? 0, state?.activity ?? 'UNKNOWN', lat, lon, timestamp);
       }
+
+    } else if (type === 'message-event-v2') {
+      const lat = attributes?.message?.latitude;
+      const lon = attributes?.message?.longitude;
+      const timestamp = attributes?.message?.time || 0;
+      const code = attributes?.message?.code;
+      const severity = attributes?.message?.severity;
+
+      const emoji = severitySymbols.get(severity) || '📍';
+      const desc = messageDescriptions.get(code) || 'Unknown message';
+
+      console.log(`${emoji} Message from ${mowerId}: ${severity} "${code} ${desc}" at ${new Date(timestamp * 1000).toISOString()} latitude: ${lat} longitude: ${lon}`);
     }
 
   } catch (err) {
