@@ -5,6 +5,9 @@ import { getToken } from './auth.js'
 import { messageDescriptions, severitySymbols } from './amcmessages.js'
 
 let pingInterval = null;
+let reconnectTimer = null;
+let reconnectAttempts = 0;
+let wss = null;
 
 function handleIncomingEvent(data) {
   if (!data.length) return;
@@ -68,7 +71,12 @@ export async function startWebSocket(apiKey, apiSecret) {
 
   let token = await getToken(apiKey, apiSecret);
 
-  const wss = new WebSocket('wss://ws.openapi.husqvarna.dev/v1', {
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
+
+  wss = new WebSocket('wss://ws.openapi.husqvarna.dev/v1', {
     headers: {
       Authorization: `Bearer ${token}`
     }
@@ -77,7 +85,22 @@ export async function startWebSocket(apiKey, apiSecret) {
   wss.on('message', handleIncomingEvent);
   wss.on('close', async (code, reason) => {
     console.warn(`🔓 Disconnected: ${code} - ${reason}`);
-    await startWebSocket(apiKey, apiSecret);
+    if (pingInterval) {
+      clearInterval(pingInterval);
+      pingInterval = null;
+    }
+    reconnectAttempts += 1;
+    let delay = 0;
+    if (reconnectAttempts > 1) {
+      const base = Math.min(30000, 1000 * 2 ** Math.min(reconnectAttempts - 1, 5));
+      const jitter = Math.floor(Math.random() * 250);
+      delay = base + jitter;
+    }
+    reconnectTimer = setTimeout(() => {
+      startWebSocket(apiKey, apiSecret).catch((err) => {
+        console.error('Reconnect attempt failed:', err);
+      });
+    }, delay);
   });
   wss.on('error', (err) => {
     console.error('⚠️ Connection error:', err);
@@ -88,8 +111,26 @@ export async function startWebSocket(apiKey, apiSecret) {
   }
 
   pingInterval = setInterval(() => {
-    if (wss.readyState === WebSocket.OPEN) {
-      wss.send('ping');
+    if (wss && wss.readyState === WebSocket.OPEN) {
+      try { wss.ping(); } catch {}
     }
   }, 60000);
+
+  wss.on('open', () => {
+    reconnectAttempts = 0;
+  });
+}
+
+export async function stopWebSocket() {
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
+  if (pingInterval) {
+    clearInterval(pingInterval);
+    pingInterval = null;
+  }
+  if (wss && (wss.readyState === WebSocket.OPEN || wss.readyState === WebSocket.CONNECTING)) {
+    try { wss.close(); } catch {}
+  }
 }
