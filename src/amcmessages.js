@@ -1,4 +1,6 @@
 import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
 const messageDescriptions = new Map();
 const severitySymbols = new Map([
@@ -11,8 +13,10 @@ const severitySymbols = new Map([
   ['UNKNOWN', '❓']
 ]);
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 try {
-  const lines = fs.readFileSync('./messages.txt', 'utf-8').split('\n');
+  const messagesPath = path.resolve(__dirname, '../messages.txt');
+  const lines = fs.readFileSync(messagesPath, 'utf-8').split('\n');
   for (const line of lines) {
     const [code, desc] = line.split('\t');
     if (code && desc) {
