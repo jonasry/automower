@@ -1,7 +1,8 @@
 import { startHttpServer } from './server.js';
-import { startWebSocket } from './amconnect.js';
+import { startWebSocket, stopWebSocket } from './amconnect.js';
 import { mowerStates } from './state.js';
-import { getToken, loadCredentials } from './auth.js'
+import { getToken, refreshToken, loadCredentials } from './auth.js'
+import { closeDb } from './db.js';
 
 async function getMowerData(accessToken, apiKey) {
   const response = await fetch('https://api.amc.husqvarna.dev/v1/mowers', {
@@ -26,19 +27,30 @@ async function getMowerData(accessToken, apiKey) {
   return data;
 }
 
-async function loadMowerState(token, apiKey) {
+async function loadMowerState(token, apiKey, apiSecret) {
   try {
     const initialData = await getMowerData(token, apiKey);
-    const timestamp = initialData.attributes?.metadata?.statusTimestamp || Date.now();
+    const nowTs = Date.now();
     for (const mower of initialData.data ?? []) {
       const mowerId = mower.id;
       const mowerName = mower.attributes?.system?.name || "Unknown";
       const activity = mower.attributes?.mower?.activity ?? 'UNKNOWN';
-      console.log(`📍 ${mowerName} (${mowerId}): ${activity} at ${new Date(timestamp).toISOString()}`);
-      mowerStates.set(mowerId, { activity, mowerName, timestamp });
+      console.log(`📍 ${mowerName} (${mowerId}): ${activity} at ${new Date(nowTs).toISOString()}`);
+      mowerStates.set(mowerId, { activity, mowerName, timestamp: nowTs });
     }
   } catch (err) {
-    console.warn('⚠️ Failed to fetch initial mower state:', err);
+    if (err?.status === 401 || err?.status === 403) {
+      console.warn('🔁 Token expired during initial load. Refreshing...');
+      const newToken = await refreshToken(apiKey, apiSecret);
+      try {
+        await loadMowerState(newToken, apiKey, apiSecret);
+        return;
+      } catch (e2) {
+        console.warn('⚠️ Failed after refresh while fetching initial mower state:', e2);
+      }
+    } else {
+      console.warn('⚠️ Failed to fetch initial mower state:', err);
+    }
   }
 }
 
@@ -53,6 +65,17 @@ async function loadMowerState(token, apiKey) {
 
   startHttpServer();
 
-  await loadMowerState(token, apiKey);
+  await loadMowerState(token, apiKey, apiSecret);
   await startWebSocket(apiKey, apiSecret);
+
+  const shutdown = async () => {
+    try {
+      await stopWebSocket();
+      closeDb();
+    } finally {
+      process.exit(0);
+    }
+  };
+  process.on('SIGINT', shutdown);
+  process.on('SIGTERM', shutdown);
 })();

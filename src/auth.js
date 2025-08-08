@@ -68,4 +68,9 @@ async function getToken(apiKey, apiSecret) {
   return token;
 }
 
-export { getToken, loadCredentials };
+// Expose a refresh function for forced renewals on 401/403
+async function refreshToken(apiKey, apiSecret) {
+  return getNewAccessToken(apiKey, apiSecret);
+}
+
+export { getToken, refreshToken, loadCredentials };
