@@ -54,6 +54,9 @@ Run the container and expose port 3000:
 docker run -p 3000:3000 \
   -e HQ_API_KEY=<your api key> \
   -e HQ_API_SECRET=<your api secret> \
+  -e PORT=3000 \
+  -v $(pwd)/db:/usr/src/app/db \
+  -v $HOME/.config/autoplanner:/root/.config/autoplanner \
   automower
 ```
 
