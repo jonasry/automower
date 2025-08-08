@@ -22,14 +22,17 @@ function handleIncomingEvent(data) {
     const { type, attributes, id: mowerId } = message;
     if (!type || !attributes || !mowerId) return;
 
+    const mowerIdShort = mowerId.substring(0, 8);
+    const currentState = mowerStates.get(mowerId);
+    const mowerName = currentState?.mowerName || "Unknown";
+
     if (type === 'mower-event-v2') {
       const activity = attributes?.mower?.activity;
-      const currentState = mowerStates.get(mowerId);
       if (activity) {
         if (activity != currentState?.activity) {
           const timestamp = Date.now();
-          console.log(`📍 Activity changed for ${mowerId}: ${currentState?.activity ?? 'none'} → ${activity} at ${new Date(timestamp).toISOString()}`);
-          mowerStates.set(mowerId, { activity, timestamp: timestamp });
+          console.log(`📍 Activity changed for ${mowerName} (${mowerIdShort}): ${activity} at ${new Date(timestamp).toISOString()}`);
+          mowerStates.set(mowerId, { activity, mowerName, timestamp });
         }
       }
 
@@ -37,10 +40,9 @@ function handleIncomingEvent(data) {
       const lat = attributes?.position?.latitude;
       const lon = attributes?.position?.longitude;
       const timestamp = attributes?.metadata?.timestamp || new Date().toISOString();
-      const state = mowerStates.get(mowerId);
 
       if (lat != null && lon != null) {
-        storePosition(mowerId, state?.timestamp ?? 0, state?.activity ?? 'UNKNOWN', lat, lon, timestamp);
+        storePosition(mowerId, currentState?.timestamp ?? 0, currentState?.activity ?? 'UNKNOWN', lat, lon, timestamp);
       }
 
     } else if (type === 'message-event-v2') {
@@ -53,7 +55,7 @@ function handleIncomingEvent(data) {
       const emoji = severitySymbols.get(severity) || '📍';
       const desc = messageDescriptions.get(code) || 'Unknown message';
 
-      console.log(`${emoji} Message from ${mowerId}: ${severity} "${code} ${desc}" at ${new Date(timestamp * 1000).toISOString()} latitude: ${lat} longitude: ${lon}`);
+      console.log(`${emoji} Message from ${mowerName} (${mowerIdShort}): ${severity} "${code} ${desc}" at ${new Date(timestamp * 1000).toISOString()} [${lat}, ${lon}]`);
     }
 
   } catch (err) {

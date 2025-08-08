@@ -29,12 +29,14 @@ async function getMowerData(accessToken, apiKey) {
 async function loadMowerState(token, apiKey) {
   try {
     const initialData = await getMowerData(token, apiKey);
+    const timestamp = initialData.attributes?.metadata?.statusTimestamp || Date.now();
     for (const mower of initialData.data ?? []) {
-      const id = mower.id;
+      const mowerId = mower.id;
+      const mowerName = mower.attributes?.system?.name || "Unknown";
       const activity = mower.attributes?.mower?.activity ?? 'UNKNOWN';
-      mowerStates.set(id, { activity, timestamp: Date.now() });
+      console.log(`📍 ${mowerName} (${mowerId}): ${activity} at ${new Date(timestamp).toISOString()}`);
+      mowerStates.set(mowerId, { activity, mowerName, timestamp });
     }
-    console.log('✅ Initial mower state populated');
   } catch (err) {
     console.warn('⚠️ Failed to fetch initial mower state:', err);
   }
@@ -48,8 +50,9 @@ async function loadMowerState(token, apiKey) {
   }
 
   let token = await getToken(apiKey, apiSecret);
-  await loadMowerState(token, apiKey);
 
-  await startWebSocket(apiKey, apiSecret);
   startHttpServer();
+
+  await loadMowerState(token, apiKey);
+  await startWebSocket(apiKey, apiSecret);
 })();
