@@ -6,6 +6,7 @@ import { getInterpolatedPositions } from './interpolate.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 
+app.disable('x-powered-by');
 app.use(express.static(path.join(__dirname, '../public')));
 
 app.get('/api/positions', (req, res) => {
@@ -26,10 +27,11 @@ app.get('/api/positions', (req, res) => {
     }
   }
 
+  res.set('Cache-Control', 'public, max-age=15');
   res.json({ heat, recent });
 });
 
-export function startHttpServer(port = 3000) {
+export function startHttpServer(port = process.env.PORT || 3000) {
   app.listen(port, () => {
     console.log(`🌍 HTTP server listening at http://localhost:${port}/map.html`);
   });
