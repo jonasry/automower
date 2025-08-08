@@ -10,6 +10,10 @@ const dbPath = path.join(dbDir, 'mower-data.sqlite');
 
 const db = new Database(dbPath);
 
+// Improve durability and read concurrency
+db.pragma('journal_mode = WAL');
+db.pragma('synchronous = NORMAL');
+
 db.exec(`
   CREATE TABLE IF NOT EXISTS positions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -22,8 +26,18 @@ db.exec(`
   )
 `);
 
+db.exec(`
+  CREATE INDEX IF NOT EXISTS idx_positions_mower_timestamp
+  ON positions (mower_id, timestamp);
+`);
+
+db.exec(`
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_positions_unique
+  ON positions (mower_id, timestamp, lat, lon);
+`);
+
 const insertStmt = db.prepare(
-  'INSERT INTO positions (mower_id, session_id, activity, lat, lon, timestamp) VALUES (?, ?, ?, ?, ?, ?)'
+  'INSERT OR IGNORE INTO positions (mower_id, session_id, activity, lat, lon, timestamp) VALUES (?, ?, ?, ?, ?, ?)'
 );
 
 const selectStmt = db.prepare(`
@@ -42,3 +56,6 @@ function getPositions() {
 }
 
 export { storePosition, getPositions };
+export function closeDb() {
+  try { db.close(); } catch {}
+}
