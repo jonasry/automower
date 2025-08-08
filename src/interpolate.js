@@ -2,7 +2,9 @@ import { getPositions } from './db.js';
 
 function interpolatePointsTimed(lat1, lon1, lat2, lon2, totalDistance, session_id, weight = 1, step = 1) {
   const points = [];
-  const steps = Math.floor(totalDistance / step);
+  const validStep = step > 0 ? step : 1;
+  const dist = isFinite(totalDistance) && totalDistance >= 0 ? totalDistance : 0;
+  const steps = Math.max(1, Math.floor(dist / validStep));
   for (let i = 0; i < steps; i++) {
     const t = i / steps;
     points.push([
@@ -48,6 +50,8 @@ function interpolateSession(points, output, session_id) {
   for (let i = 0; i < points.length - 1; i++) {
     const a = points[i];
     const b = points[i + 1];
+
+    if (!isFinite(a.lat) || !isFinite(a.lon) || !isFinite(b.lat) || !isFinite(b.lon)) continue;
 
     const dist = haversineDistance(a, b);
 
