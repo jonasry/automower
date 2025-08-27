@@ -6,3 +6,5 @@ Dockerfile
 .gitignore
 *.md
 *.sqlite
+*.sqlite-shm
+*.sqlite-wal
