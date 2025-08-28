@@ -44,8 +44,10 @@ function haversineDistance(a, b) {
 function interpolateSession(points, output, session_id) {
   const first = points[0];
   const ageInDays = daysBetween(new Date(first.timestamp), new Date());
-  const a = 1 + Math.max(0, Math.min(7, ageInDays));
-  const weight = Math.pow(2, -a);
+  if (ageInDays > 7) return;
+
+  const a = Math.max(0, Math.min(7, ageInDays));
+  const weight = Math.pow(2, 1 - a);
 
   for (let i = 0; i < points.length - 1; i++) {
     const a = points[i];
