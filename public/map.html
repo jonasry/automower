@@ -3,108 +3,186 @@
 <head>
   <title>Automower Heatmap</title>
   <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
   <script src="https://unpkg.com/leaflet.heat/dist/leaflet-heat.js"></script>
   <style>
-    body, html { margin: 0; padding: 0; height: 100%; }
-    #map { height: 100%; width: 100%; }
+    :root {
+      --topbar-h: 56px;
+      --sidebar-w: 280px;
+      --bg: #0f172a; /* slate-900 */
+      --bg-elev: #111827; /* gray-900 */
+      --fg: #ffffff;
+      --muted: #94a3b8; /* slate-400 */
+      --border: #1f2937; /* gray-800 */
+      --panel: #0b1020;
+    }
+
+    html, body { height: 100%; margin: 0; }
+    body {
+      display: flex;
+      flex-direction: column;
+      background: #0b1020;
+      color: var(--fg);
+      font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    }
+
+    /* Top bar */
+    .topbar { height: var(--topbar-h); background: var(--bg); color: var(--fg); display: flex; align-items: center; justify-content: space-between; padding: 0 16px; box-shadow: 0 1px 0 var(--border) inset; font-size: 2em; }
+    .brand { display: flex; align-items: center; gap: 12px; font-weight: 700; letter-spacing: 1px; }
+    .brand .name { font-size: 1.25em; }
+    .brand select { background: var(--bg-elev); color: var(--fg); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; }
+
+    .status { display: flex; align-items: center; gap: 10px; color: var(--fg); }
+    .battery { display: inline-flex; align-items: center; gap: 8px; }
+    .battery-icon { position: relative; width: 36px; height: 16px; border: 2px solid #e5e7eb; border-radius: 3px; box-sizing: border-box; }
+    .battery-icon::after { content: ""; position: absolute; right: -5px; top: 4px; width: 3px; height: 8px; background: #e5e7eb; border-radius: 1px; }
+    .battery-level { height: 100%; background: #22c55e; /* green */ width: var(--level, 50%); }
+    .battery-text { min-width: 3ch; text-align: right; }
+
+    /* Content area */
+    .content { flex: 1; min-height: 0; display: flex; }
+    .sidebar { width: var(--sidebar-w); background: var(--panel); border-right: 1px solid var(--border); padding: 12px; overflow: auto; }
+    .sidebar h2 { margin: 8px 0 12px; font-size: 14px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; }
+    .sidebar .field { display: flex; align-items: center; gap: 8px; }
+    .sidebar select { width: 100%; background: var(--bg-elev); color: var(--fg); border: 1px solid var(--border); border-radius: 6px; padding: 8px; }
+    .info { list-style: none; padding: 8px 0 0; margin: 0; color: #cbd5e1; }
+    .info li { padding: 6px 0; border-bottom: 1px dashed var(--border); }
+
+    .main { position: relative; flex: 1; }
+    #map { position: absolute; inset: 0; width: 100%; height: 100%; }
+
+    /* Leaflet tweaks for dark UI */
+    .leaflet-bar a, .leaflet-bar a:hover { background: var(--bg-elev); color: var(--fg); border-color: var(--border); }
+    .leaflet-control-attribution { background: var(--bg-elev); color: var(--muted); }
   </style>
 </head>
 <body>
-  <div id="map"></div>
+  <header class="topbar">
+    <div class="brand">
+      <span class="name" id="mowerName">AM 415X</span>
+      <select id="mowerPicker" title="Pick mower">
+        <option value="am415x">AM 415X</option>
+      </select>
+    </div>
+    <div class="status">
+      <div class="battery" title="Battery">
+        <div class="battery-icon"><div class="battery-level" id="batteryLevel" style="--level:45%"></div></div>
+        <span class="battery-text" id="batteryText">45%</span>
+      </div>
+    </div>
+  </header>
+
+  <div class="content">
+    <aside class="sidebar">
+      <h2>Session</h2>
+      <div class="field">
+        <select id="sessionSelect" title="Pick session">
+          <option value="latest">Latest session</option>
+        </select>
+      </div>
+      <h2>Info</h2>
+      <ul class="info" id="sessionInfo">
+        <li>Start: —</li>
+        <li>End: —</li>
+        <li>Duration: —</li>
+        <li>Points: —</li>
+      </ul>
+    </aside>
+    <main class="main">
+      <div id="map"></div>
+    </main>
+  </div>
+
   <script>
     const defaultGradient = {
-        0.2: '#0000FF',
-        0.3: '#007FFF',
-        0.4: '#00FFFF',
-        0.5: '#00FF7F',
-        0.6: '#00FF00',
-        0.7: '#7FFF00',
-        0.8: '#FFFF00',
-        0.9: '#FF7F00',
-        1.0: '#FF0000'
-    }
+      0.2: '#0000FF',
+      0.3: '#007FFF',
+      0.4: '#00FFFF',
+      0.5: '#00FF7F',
+      0.6: '#00FF00',
+      0.7: '#7FFF00',
+      0.8: '#FFFF00',
+      0.9: '#FF7F00',
+      1.0: '#FF0000'
+    };
 
-    const map = L.map('map').setView([55.7, 13.2], 17); // Adjust to your lawn center
+    // Map setup fills the main area; no explicit height calc needed.
+    const map = L.map('map').setView([55.7, 13.2], 17);
 
-    // L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    //   maxZoom: 20
-    // }).addTo(map);
+    // Optional tiles if desired; disabled by default to keep dark look
+    // L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 20 }).addTo(map);
 
     let heatLayer = null;
     let recentLayer = null;
 
     function loadData() {
-        fetch('/api/positions')
-            .then(res => res.json())
-            .then(({ heat, recent }) => {
-                if (heatLayer) {
-                    map.removeLayer(heatLayer);
-                }
-                heatLayer = L.heatLayer(heat, {
-                    radius: 8,
-                    blur: 5,
-                    maxZoom: 20,
-                    gradient: defaultGradient
-                }).addTo(map);
+      fetch('/api/positions')
+        .then(res => res.json())
+        .then(({ heat, recent }) => {
+          if (heatLayer) map.removeLayer(heatLayer);
+          heatLayer = L.heatLayer(heat, {
+            radius: 8,
+            blur: 5,
+            maxZoom: 20,
+            gradient: defaultGradient
+          }).addTo(map);
 
-                if (!map._boundsFitted) {
-                    const latLngs = heat.map(p => L.latLng(p[0], p[1]));
-                    const bounds = L.latLngBounds(latLngs);
-                    map.fitBounds(bounds);
-                    map._boundsFitted = true;
-                }
+          if (!map._boundsFitted && heat && heat.length) {
+            const latLngs = heat.map(p => L.latLng(p[0], p[1]));
+            const bounds = L.latLngBounds(latLngs);
+            map.fitBounds(bounds);
+            map._boundsFitted = true;
+          }
 
-                if (recentLayer) {
-                    map.removeLayer(recentLayer);
-                }
-                recentLayer = L.layerGroup();
-                const polylinePoints = [];
-                recent.forEach(([lat, lon]) => {
-                    L.circleMarker([lat, lon], {
-                        radius: 3,
-                        color: 'indigo',
-                        weight: 1,
-                        fillColor: 'indigo',
-                        fillOpacity: 1
-                    }).addTo(recentLayer);
-                    polylinePoints.push([lat, lon]);
-                });
-                if (polylinePoints.length > 1) {
-                    const dashedLine = L.polyline(polylinePoints, {
-                        color: 'indigo',
-                        weight: 2.25,
-                        dashArray: '6, 4',
-                        opacity: 0.7
-                    });
-                    dashedLine.addTo(recentLayer);
-
-                    const startPoint = polylinePoints[polylinePoints.length - 1];
-                    const endPoint = polylinePoints[0];
-                    L.marker(startPoint, {
-                        icon: L.divIcon({
-                            className: 'flag-icon',
-                            html: '🟡',
-                            iconSize: [24, 24],
-                            iconAnchor: [0, 12]
-                        })
-                    }).addTo(recentLayer);
-                    L.marker(endPoint, {
-                        icon: L.divIcon({
-                            className: 'flag-icon',
-                            html: '🟢',
-                            iconSize: [24, 24],
-                            iconAnchor: [0, 12]
-                        })
-                    }).addTo(recentLayer);
-                }
-                recentLayer.addTo(map);
+          if (recentLayer) map.removeLayer(recentLayer);
+          recentLayer = L.layerGroup();
+          const polylinePoints = [];
+          recent.forEach(([lat, lon]) => {
+            L.circleMarker([lat, lon], {
+              radius: 3,
+              color: 'indigo',
+              weight: 1,
+              fillColor: 'indigo',
+              fillOpacity: 1
+            }).addTo(recentLayer);
+            polylinePoints.push([lat, lon]);
+          });
+          if (polylinePoints.length > 1) {
+            const dashedLine = L.polyline(polylinePoints, {
+              color: 'indigo',
+              weight: 2.25,
+              dashArray: '6, 4',
+              opacity: 0.7
             });
+            dashedLine.addTo(recentLayer);
+
+            const startPoint = polylinePoints[polylinePoints.length - 1];
+            const endPoint = polylinePoints[0];
+            L.marker(startPoint, { icon: L.divIcon({ className: 'flag-icon', html: '🟡', iconSize: [24, 24], iconAnchor: [0, 12] }) }).addTo(recentLayer);
+            L.marker(endPoint, { icon: L.divIcon({ className: 'flag-icon', html: '🟢', iconSize: [24, 24], iconAnchor: [0, 12] }) }).addTo(recentLayer);
+          }
+          recentLayer.addTo(map);
+        })
+        .catch(() => {/* noop for now */});
     }
 
     loadData();
     setInterval(loadData, 30000);
+
+    // Placeholders for future integration
+    // updateBattery(45) will update the indicator
+    function updateBattery(pct) {
+      const clamped = Math.max(0, Math.min(100, pct|0));
+      const level = document.getElementById('batteryLevel');
+      const text = document.getElementById('batteryText');
+      level.style.setProperty('--level', clamped + '%');
+      level.style.background = clamped < 20 ? '#ef4444' : (clamped < 50 ? '#f59e0b' : '#22c55e');
+      text.textContent = clamped + '%';
+    }
+    // Example initial value
+    updateBattery(45);
   </script>
 </body>
 </html>
