@@ -1,8 +1,9 @@
 import WebSocket from 'ws';
-import { storePosition } from './db.js';
+import { storePosition, storeEvent } from './db.js';
 import { mowerStates } from './state.js';
 import { getToken } from './auth.js'
 import { messageDescriptions, severitySymbols } from './amcmessages.js'
+import { shapeEventForStorage } from './events.js';
 
 let pingInterval = null;
 let reconnectTimer = null;
@@ -20,6 +21,15 @@ function handleIncomingEvent(data) {
 
     if (message.ready) {
       console.log("🔒 Connected")
+    }
+
+    const shapedEvent = shapeEventForStorage(message);
+    if (shapedEvent) {
+      try {
+        storeEvent(shapedEvent);
+      } catch (err) {
+        console.error('Failed to persist event:', err);
+      }
     }
 
     const { type, attributes, id: mowerId } = message;

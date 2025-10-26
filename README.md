@@ -40,6 +40,16 @@ The WebSocket connection is subject to a 2-hour timeout per the API's limitation
 
 A periodic `ping` is sent every 60 seconds to keep the connection alive. If the application is restarted, it will reuse a cached token from disk if it's still valid, or request a new one if needed.
 
+#### Event storage
+
+Every WebSocket payload (battery, planner, mower status, etc.) is persisted to the local SQLite database in the `events` table together with a normalized timestamp, optional coordinates, and the raw JSON payload for auditing. This runs alongside the existing `positions` table that backs the heatmap view.
+
+To manually verify ingestion while developing, point `sqlite3` at the database after running the app:
+
+```bash
+sqlite3 db/mower-data.sqlite "SELECT event_type, event_timestamp, message_code FROM events ORDER BY id DESC LIMIT 5;"
+```
+
 ## Docker
 
 You can build a Docker image for the application with the included `Dockerfile`:
