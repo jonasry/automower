@@ -1,0 +1,1851 @@
+openapi: '3.0.3'
+info:
+  version: '1.0.0'
+  title: Automower® Connect API
+  license:
+    name: MIT
+  description:
+    This API allows you to control and obtain information about Automower®.
+  contact:
+    name: Husqvarna Smart Home
+    url: https://www.husqvarna.com/uk/lawn-garden/smart-home-integration/
+servers:
+     - url: https://api.amc.husqvarna.dev/v1
+       description: Live Server
+security:
+  - APIKeyHeader: []
+    Token: []
+    Provider: []
+
+tags:
+  - name: 'Mower'
+    description: >-
+      REST API that can supply information and status about mowers paired to a user. You need to pair the mower in Automower® Connect app
+  - name: 'Actions'
+    description: >-
+      REST API that enables a user to control a paired mower.
+
+paths:
+  /mowers:
+    get:
+      tags:
+        - 'Mower'
+      summary: List data for all mowers linked to a user.
+      description: >-
+        List data for all mowers linked to the user associated with the
+        access token.
+      responses:
+        '200':
+          $ref: '#/components/responses/MultipleMowers'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+  /mowers/{id}:
+    get:
+      tags:
+        - 'Mower'
+      summary: Get data for a mower linked to a user.
+      description: Get data for a mower linked to the user associated with the access token.
+      parameters:
+        - $ref: '#/components/parameters/MowerID'
+      responses:
+        '200':
+          $ref: '#/components/responses/SingleMower'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+  /mowers/{id}/actions:
+    post:
+      tags:
+        - 'Actions'
+      summary: Accepts actions to control a mower linked to a user.
+      description: Accepts actions to control a mower linked to a user.
+      parameters:
+        - $ref: '#/components/parameters/MowerID'
+      requestBody:
+        $ref: '#/components/requestBodies/Action'
+      responses:
+        '202':
+          $ref: '#/components/responses/MowerCommandAccepted'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+  /mowers/{id}/calendar:
+    post:
+      tags:
+        - 'Actions'
+      summary: Update the calendar on the mower.
+      description: Update the calendar on the mower. The data sent in will replace the calendar on the mower. You need to include all tasks both new and old. To delete a task you just skip the task in the list.
+      parameters:
+        - $ref: '#/components/parameters/MowerID'
+      requestBody:
+        $ref: '#/components/requestBodies/Calendar'
+      responses:
+        '202':
+          $ref: '#/components/responses/MowerCommandAccepted'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+  /mowers/{id}/errors/confirm:
+    post:
+      tags:
+        - 'Actions'
+      summary: Confirm current error.
+      description: Confirm current non fatal error on the mower. Same function that is available in the Automower Connect app. Will only work if current error is considered confirmable by the mower. Available for models 405X, 415X, 435X AWD and 535 AWD. Also available on all Ceora, EPOS and NERA models.
+      parameters:
+        - $ref: '#/components/parameters/MowerID'
+      responses:
+        '202':
+          $ref: '#/components/responses/MowerCommandAccepted'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+  /mowers/{id}/messages:
+    get:
+      tags:
+        - 'Mower'
+      summary: Get last messages for a mower.
+      description: Get last occurred messages for a mower (max 50). Includes the position when the error occurred. 
+      parameters:
+        - $ref: '#/components/parameters/MowerID'
+      responses:
+        '200':
+          $ref: '#/components/responses/SingleMowerMessages'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+  /mowers/{id}/settings:
+    post:
+      tags:
+        - 'Actions'
+      summary: Update the settings on the mower. 
+      description: Update the settings on the mower. Available settings can be found when getting the mower data. Its possible to set cutting height or/and headlight.
+      parameters:
+        - $ref: '#/components/parameters/MowerID'
+      requestBody:
+        $ref: '#/components/requestBodies/Settings'
+      responses:
+        '202':
+          $ref: '#/components/responses/MowerCommandListAccepted'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+  /mowers/{id}/statistics/resetCuttingBladeUsageTime:
+    post:
+      tags:
+        - 'Actions'
+      summary: Reset the cutting blade usage time.
+      description: Reset the cutting blade usage time. Same function that is available in the Automower Connect app. The statistics value cuttingBladeUsageTime will be reset. Can be used when cutting blades are changed on the Automower to know when its time to the blades next time.
+      parameters:
+        - $ref: '#/components/parameters/MowerID'
+      responses:
+        '202':
+          $ref: '#/components/responses/MowerCommandAccepted'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+  /mowers/{id}/stayOutZones:
+    get:
+      tags:
+        - 'Mower'
+      summary: Get all stay out zones for a mower linked to a user.
+      description: Get all stay out zones for a mower linked to the user associated with the access token. Stay out zones are not available on EPOS mowers.
+      parameters:
+        - $ref: '#/components/parameters/MowerID'
+      responses:
+        '200':
+          $ref: '#/components/responses/SingleMowerStayOutZones'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+  /mowers/{id}/stayOutZones/{stayOutId}:
+    patch:
+      tags:
+        - 'Actions'
+      summary: Enable or disable the stay-out zone.
+      description: Enable or disable the stay-out zone.
+      parameters:
+        - $ref: '#/components/parameters/MowerID'
+        - $ref: '#/components/parameters/StayOutID'
+      requestBody:
+        $ref: '#/components/requestBodies/StayOutZone'
+      responses:
+        '202':
+          $ref: '#/components/responses/MowerCommandAccepted'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+  /mowers/{id}/workAreas:
+    get:
+      tags:
+        - 'Mower'
+      summary: Get all detailed work areas for a mower linked to a user.
+      description: Get all detailed work areas for a mower linked to the user associated with the access token.
+      parameters:
+        - $ref: '#/components/parameters/MowerID'
+      responses:
+        '200':
+          $ref: '#/components/responses/SingleMowerWorkAreas'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+  /mowers/{id}/workAreas/{workAreaId}:
+    get:
+      tags:
+        - 'Mower'
+      summary: Get detailed data for a work area for a mower linked to a user.
+      description: Get detailed data for a work area for a mower linked to the user associated with the access token.
+      parameters:
+        - $ref: '#/components/parameters/MowerID'
+        - $ref: '#/components/parameters/WorkAreaID'
+      responses:
+        '200':
+          $ref: '#/components/responses/SingleMowerWorkArea'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+    patch:
+      tags:
+        - 'Actions'
+      summary: Update the the work area on the mower. 
+      description: Update the work area on the mower. This will update cutting height on the work area.
+      parameters:
+        - $ref: '#/components/parameters/MowerID'
+        - $ref: '#/components/parameters/WorkAreaID'
+      requestBody:
+        $ref: '#/components/requestBodies/WorkArea'
+      responses:
+        '202':
+          $ref: '#/components/responses/MowerCommandAccepted'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+  /mowers/{id}/workAreas/{workAreaId}/calendar:
+    post:
+      tags:
+        - 'Actions'
+      summary: Update the calendar for a work area on the mower. 
+      description: Update the calendar for a work area on the mower. This will replace all tasks for the work area.
+      parameters:
+        - $ref: '#/components/parameters/MowerID'
+        - $ref: '#/components/parameters/WorkAreaID'
+      requestBody:
+        $ref: '#/components/requestBodies/CalendarWorkArea'
+      responses:
+        '202':
+          $ref: '#/components/responses/MowerCommandAccepted'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+
+components:
+  parameters:
+    MowerID:
+      name: id
+      in: path
+      description: Identity of the mower. Can be obtain when listing mowers.
+      required: true
+      schema:
+        type: string
+        format: uuid
+        pattern: \b[0-9a-f]{8}\b-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-\b[0-9a-f]{12}\b
+        maxLength: 36
+    WorkAreaID:
+      name: workAreaId
+      in: path
+      description: Identity of the work area.
+      required: true
+      schema:
+        type: integer
+        format: int64
+        minimum: 0
+        example: 12345
+    StayOutID:
+      name: stayOutId
+      in: path
+      description: Identity of the stay-out zone.
+      required: true
+      schema:
+        type: string
+        format: uuid
+        pattern: \b[0-9a-f]{8}\b-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-\b[0-9a-f]{12}\b
+        maxLength: 36
+    Enable:
+      name: enable
+      in: path
+      description: True if enable or false otherwise.
+      required: true
+      schema:
+        type: boolean
+
+  schemas:
+    JsonApiDataDocument:
+      type: object
+      additionalProperties: false
+      description: A data document compliant with the JSON API Specification.
+      properties:
+        data:
+          $ref: '#/components/schemas/JsonApiData'
+
+    JsonApiDataListDocument:
+      type: object
+      additionalProperties: false
+      description: A data list document compliant with the JSON API Specification.
+      properties:
+        data:
+          type: array
+          description: An array of primary data objects.
+          items:
+            $ref: '#/components/schemas/JsonApiData'
+
+    JsonApiData:
+      type: object
+      additionalProperties: false
+      description: A primary data object compliant with the JSON API Specification.
+      properties:
+        type:
+          type: string
+          description: The type of the data object.
+          example: mower
+        id:
+          type: string
+          format: uuid
+          maxLength: 36
+          description: The identity of the data object
+          example: 256b2365-33a7-46fe-a9fb-e67e84f4ac01
+        attributes:
+          $ref: '#/components/schemas/MowerData'
+
+    JsonApiDataDocumentMessages:
+      type: object
+      additionalProperties: false
+      description: A data document compliant with the JSON API Specification.
+      properties:
+        data:
+          $ref: '#/components/schemas/JsonApiDataMessages'
+
+    JsonApiDataMessages:
+      type: object
+      additionalProperties: false
+      description: A primary data object compliant with the JSON API Specification.
+      properties:
+        type:
+          type: string
+          description: The type of the data object.
+          example: messages
+        id:
+          type: string
+          example: messages
+        attributes:
+          $ref: '#/components/schemas/Messages'
+
+    JsonApiDataDocumentStayOutZones:
+      type: object
+      additionalProperties: false
+      description: A data document compliant with the JSON API Specification.
+      properties:
+        data:
+          $ref: '#/components/schemas/JsonApiDataStayOutZones'
+
+    JsonApiDataStayOutZones:
+      type: object
+      additionalProperties: false
+      description: A primary data object compliant with the JSON API Specification.
+      properties:
+        type:
+          type: string
+          description: The type of the data object.
+          example: stayOutZones
+        id:
+          type: string
+          example: stayOutZones
+        attributes:
+          $ref: '#/components/schemas/StayOutZones'
+
+    JsonApiDataDocumentWorkArea:
+      type: object
+      additionalProperties: false
+      description: A data document compliant with the JSON API Specification.
+      properties:
+        data:
+          $ref: '#/components/schemas/JsonApiDataWorkArea'
+
+    JsonApiDataListDocumentWorkAreas:
+      type: object
+      additionalProperties: false
+      description: A data list document compliant with the JSON API Specification.
+      properties:
+        data:
+          type: array
+          description: An array of primary data objects.
+          items:
+            $ref: '#/components/schemas/JsonApiDataWorkArea'
+
+    JsonApiDataWorkArea:
+      type: object
+      additionalProperties: false
+      description: A primary data object compliant with the JSON API Specification.
+      properties:
+        type:
+          type: string
+          description: The type of the data object.
+          example: workArea
+        id:
+          type: integer
+          example: 123456
+          description: The identity of the work area
+        attributes:
+          $ref: '#/components/schemas/WorkAreaData'
+
+    JsonApiDataDocumentCommandResult:
+      type: object
+      additionalProperties: false
+      description: A data document compliant with the JSON API Specification.
+      properties:
+        data:
+          $ref: '#/components/schemas/JsonApiDataCommandResult'
+
+    JsonApiDataDocumentListCommandResult:
+      type: object
+      additionalProperties: false
+      description: A data list document compliant with the JSON API Specification.
+      properties:
+        data:
+          type: array
+          description: An array of primary data objects.
+          items:
+            $ref: '#/components/schemas/JsonApiDataCommandResult'
+
+    JsonApiDataCommandResult:
+      type: object
+      additionalProperties: false
+      description: A primary data object compliant with the JSON API Specification.
+      properties:
+        type:
+          type: string
+          description: The type of the data object. Depending on what action is sent to the mower. control is when sending an action (Start/Park). Timetable when updating calendar. 
+          enum:
+            - control
+            - Timetable
+            - cuttingHeight
+            - headlight
+            - stayOutZone
+        id:
+          type: string
+          format: uuid
+          pattern: \b[0-9a-f]{8}\b-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-\b[0-9a-f]{12}\b
+          maxLength: 36
+          description: The command id generated when sending the command to the mower.
+          example: 256b2365-33a7-46fe-a9fb-e67e84f4ac01
+
+    JsonApiErrorDocument:
+      type: object
+      additionalProperties: false
+      description: An error document compliant with the JSON API Specification.
+      properties:
+        errors:
+          type: array
+          maxItems: 1
+          items:
+            $ref: '#/components/schemas/JsonApiError'
+
+    JsonApiError:
+      type: object
+      additionalProperties: false
+      description: A primary error object compliant with the JSON API Specification.
+      properties:
+        id:
+          type: string
+          description: A unique identifier for this particular occurrence of the problem.
+          example: f41d9bbd-abc3-4c4b-b68c-b0079bb10820
+        status:
+          type: string
+          description: >-
+            The HTTP status code applicable to this problem, expressed as a string
+            value.
+          example: nnn
+        code:
+          type: string
+          description: 'An application specific error code, expressed as a string value.'
+          example: some.error.code
+        title:
+          type: string
+          description: >-
+            A short, human readable summary of the problem that should not change
+            from occurrence to occurrence of the problem, except for purposes of
+            localization.
+          example: Some summary of the problem
+        detail:
+          type: string
+          description: >-
+            A human readable explanation specific to this occurrence of the
+            problem. Like title, this value can be localized.
+          example: Some details about the specific problem.
+
+    MowerData:
+      type: object
+      additionalProperties: false
+      description: A mower data object with all data for a mower.
+      properties:
+        system:
+          $ref: '#/components/schemas/System'
+        battery:
+          $ref: '#/components/schemas/Battery'
+        capabilities:
+          $ref: '#/components/schemas/Capabilities'
+        mower:
+          $ref: '#/components/schemas/MowerApp'
+        calendar:
+          $ref: '#/components/schemas/Calendar'
+        planner:
+          $ref: '#/components/schemas/Planner'
+        metadata:
+          $ref: '#/components/schemas/Metadata'
+        positions:
+          $ref: '#/components/schemas/Positions'
+        settings:
+          $ref: '#/components/schemas/Settings'
+        statistics:
+          $ref: '#/components/schemas/Statistics'
+        stayOutZones:
+          $ref: '#/components/schemas/StayOutZones'
+        workAreas:
+          $ref: '#/components/schemas/WorkAreas'
+      required:
+        - system
+        - battery
+        - mower
+        - planner
+        - metadata
+
+    System:
+      type: object
+      additionalProperties: false
+      description: System information about a Automower®
+      properties:
+        name:
+          type: string
+          description: The name given to the Automower® by the user when pairing the Automower®
+          example: My Mower
+        model:
+          type: string
+          description: The model name of the Automower®
+          example: 450x
+        serialNumber:
+          type: integer
+          description: The serial number for the Automower®
+          example: 701009001
+      required:
+        - name
+        - model
+        - serialNumber
+
+    Battery:
+      type: object
+      additionalProperties: false
+      description: Information about the battery in the Automower®
+      properties:
+        batteryPercent:
+          type: integer
+          minimum: 0
+          maximum: 100
+          description: The current battery level percentage
+          example: 77
+      required:
+        - batteryPercent
+
+    Capabilities:
+      type: object
+      additionalProperties: false
+      description: Information about what capabilities the Automower® has
+      properties:
+        canConfirmError:
+          type: boolean
+          description: If the Automower® supports the command confirm error. The error also needs to be confirmable.
+          example: true
+        headlights:
+          type: boolean
+          description: If the Automower® supports headlights
+          example: true
+        position:
+          type: boolean
+          description: If the Automower® supports GPS position. If false no positions are available.
+          example: true
+        stayOutZones:
+          type: boolean
+          description: If the Automower® supports stay-out zones
+          example: true
+        workAreas:
+          type: boolean
+          description: If the Automower® supports work areas
+          example: true
+      required:
+        - canConfirmError
+        - headlights
+        - position
+        - workAreas
+        - stayOutZones
+
+    MowerApp:
+      type: object
+      additionalProperties: false
+      description: Information about the mowers current status
+      properties:
+        mode:
+          type: string
+          enum:
+            - MAIN_AREA
+            - SECONDARY_AREA
+            - HOME
+            - DEMO
+            - UNKNOWN
+            - POI
+          example: MAIN_AREA
+          description: >
+            Mode:
+              * `MAIN_AREA` - Mower will mow until low battery. Go home and charge. Leave and continue mowing.
+              * `SECONDARY_AREA` - Mower will mow until empty battery, or a limited time. When done, it stops in the garden.
+              * `HOME` - Mower goes home and parks forever.
+              * `DEMO` - Same as main area, but shorter times. (No blade operation)
+              * `UNKNOWN` - Unknown mode.
+              * `POI` - Point of interest.
+        activity:
+          type: string
+          enum:
+            - UNKNOWN
+            - NOT_APPLICABLE
+            - MOWING
+            - GOING_HOME
+            - CHARGING
+            - LEAVING
+            - PARKED_IN_CS
+            - STOPPED_IN_GARDEN
+          example: MOWING
+          description: >
+            Activity:
+              * `UNKNOWN` - Unknown.
+              * `NOT_APPLICABLE` - Not applicable.
+              * `MOWING` - Mower is currently mowing.
+              * `GOING_HOME` - Mower is currently going home to the charging station.
+              * `CHARGING` - Mower is currently charging. Note that the mower will only report the activity charging if it was its own decision to go home and charge. I.e., it would like to mow but is charging because it has to. If the mower is restricted it may very well charge when in the charging station, but the activity will be Parked.
+              * `LEAVING` - Mower is currently leaving the charging station and is heading out to a starting point.
+              * `PARKED_IN_CS` - Mower is parked in the charging station.
+              * `STOPPED_IN_GARDEN` - Mower has stopped in garden, for instance in manual mode when the task has been completed.
+        inactiveReason:
+          type: string
+          enum:
+            - 'NONE'
+            - 'PLANNING'
+            - 'SEARCHING_FOR_SATELLITES'
+          example: PLANNING
+          description: >
+            Inactive reason:
+              * `NONE` - No inactive reason.
+              * `PLANNING` - The mower is planning a path or a work area.
+              * `SEARCHING_FOR_SATELLITES` - Waiting for fix when using EPOS.
+        state:
+          type: string
+          enum:
+            - 'UNKNOWN'
+            - 'PAUSED'
+            - 'IN_OPERATION'
+            - 'WAIT_UPDATING'
+            - 'WAIT_POWER_UP'
+            - 'RESTRICTED'
+            - 'OFF'
+            - 'STOPPED'
+            - 'ERROR'
+            - 'FATAL_ERROR'
+            - 'ERROR_AT_POWER_UP'
+          example: IN_OPERATION
+          description: >
+            State:
+              * `UNKNOWN` - Unknown.
+              * `PAUSED` - Not applicable.
+              * `IN_OPERATION` - Mower is operating according to selected mode. The activity gives information about what it is currently up to.
+              * `WAIT_UPDATING` - Mower is in wait state when updating.
+              * `WAIT_POWER_UP` - Mower is in wait state when powering up.
+              * `RESTRICTED` - The mower is currently restricted from mowing for some reason. It will continue mowing when the restriction is removed. The activity gives information about what the mower is currently up to.
+              * `OFF` - Mower is turned off
+              * `STOPPED` - Mower is stopped, and cannot be started remotely. Start requirements (safety or other) are not fulfilled.
+              * `ERROR` - A temporary error has occurred. If the error is resolved, the mower will resume operation without user interaction. Typically, this happens when the loop signal is lost. When it comes back, the operation is resumed.
+              * `FATAL_ERROR` - A fatal error has occurred. Error has to be fixed confirmed to leave this state.
+              * `ERROR_AT_POWER_UP` - An error at power up.
+        workAreaId:
+          type: integer
+          format: int64
+          example: 768
+          description: >-
+            Current work area id. If the mower supports work areas and the mower is working on a work area. If no current work area is selected this attribute is not set.
+        errorCode:
+          type: integer
+          minimum: 0
+          example: 0
+        errorCodeTimestamp:
+          type: integer
+          format: int64
+          minimum: 0
+          example: 0
+          description: >-
+            Timestamp for the last error code in milliseconds since 1970-01-01T00:00:00 in local time.
+            NOTE! This timestamp is in local time for the mower and is coming directly from the mower.
+        isErrorConfirmable:
+          type: boolean
+          example: false
+          description: >
+            If the mower has an errorCode this attribute state if the error is confirmable. If true the POST `/mowers/{id}/errors/confirm` will be successful.
+      required:
+        - mode
+        - activity
+        - state
+        
+    Calendar:
+      type: object
+      additionalProperties: false
+      description: Information about the calendar tasks. An Automower® can have several tasks. If the mower supports work areas the property workAreaId is required to connect the task to an work area.
+      properties:
+        tasks:
+          type: array
+          items:
+            $ref: '#/components/schemas/CalendarTask'
+
+    CalendarTask:
+      type: object
+      additionalProperties: false
+      properties:
+        start:
+          type: integer
+          minimum: 0
+          maximum: 1439
+          example: 420
+          description: Start time expressed in minutes after midnight.
+        duration:
+          type: integer
+          minimum: 1
+          maximum: 1440
+          example: 780
+          description: Duration time expressed in minutes.
+        monday:
+          type: boolean
+          example: true
+          description: Enabled on Mondays
+        tuesday:
+          type: boolean
+          description: Enabled on Tuesdays
+        wednesday:
+          type: boolean
+          example: true
+          description: Enabled on Wednesdays
+        thursday:
+          type: boolean
+          example: true
+          description: Enabled on Thursdays
+        friday:
+          type: boolean
+          example: true
+          description: Enabled on Fridays
+        saturday:
+          type: boolean
+          example: false
+          description: Enabled on Saturdays
+        sunday:
+          type: boolean
+          example: false
+          description: Enabled on Sundays
+      required:
+        - start
+        - duration
+        - monday
+        - tuesday
+        - wednesday
+        - thursday
+        - friday
+        - saturday
+        - sunday
+
+    CalendarWorkArea:
+      type: object
+      additionalProperties: false
+      description: Information about the calendar tasks. An Automower® can have several tasks. If the mower supports work areas the property workAreaId is required to connect the task to an work area.
+      properties:
+        tasks:
+          type: array
+          items:
+            $ref: '#/components/schemas/CalendarTaskWorkArea'
+
+    CalendarTaskWorkArea:
+      type: object
+      additionalProperties: false
+      allOf:
+        - $ref: '#/components/schemas/CalendarTask'
+        - properties:
+            workAreaId:
+              type: integer
+              format: int64
+              example: 123456
+              description: The work area the calendar task should effect.
+        - required:
+            - start
+            - duration
+            - monday
+            - tuesday
+            - wednesday
+            - thursday
+            - friday
+            - saturday
+            - sunday
+            - workAreaId
+
+    Planner:
+      type: object
+      additionalProperties: false
+      description: Information about the planner. The planner tells when the mower should work.
+      properties:
+        nextStartTimestamp:
+          type: integer
+          format: int64
+          example: 0
+          description: >-
+            Timestamp for the next auto start in milliseconds since 1970-01-01T00:00:00 in local time. 
+            If the mower is charging then the value is the estimated time when it will be leaving the charging station. 
+            If the value is 0 then the mower should start now. 
+            NOTE! This timestamp is in local time for the mower and is coming directly from the mower.
+        override:
+          type: object
+          description: The Planner has an override feature, which can be used to override the operation decided by the Calendar. There is room for one override at a time, and it occurs from now and for a duration of time.
+          required:
+            - action
+          properties:
+            action:
+              type: string
+              enum:
+                - NOT_ACTIVE
+                - FORCE_PARK
+                - FORCE_MOW
+              example: FORCE_MOW
+              description: >
+                Action:
+                  * `NOT_ACTIVE` - Not active.
+                  * `FORCE_PARK` - Force park until next start means that no more mowing will be done within the current task. Operation will be resumed at the start of the next task instead.
+                  * `FORCE_MOW` - Force the mower to mow for the specified amount of time. When the time has elapsed, the override is removed and the Planner reverts to the Calendar instead.
+        restrictedReason:
+          type: string
+          enum:
+            - NONE
+            - WEEK_SCHEDULE
+            - PARK_OVERRIDE
+            - SENSOR
+            - DAILY_LIMIT
+            - FOTA
+            - FROST
+            - ALL_WORK_AREAS_COMPLETED
+            - EXTERNAL
+          example: PARK_OVERRIDE
+          description: >
+            Restricted reason:
+              * `NONE` - No restricted reason.
+              * `WEEK_SCHEDULE` - There is no task in the Calendar right now, nothing to do.
+              * `PARK_OVERRIDE` - The restriction is because someone forced us to park, using the override feature.
+              * `SENSOR` - The sensor has decided that the grass is short enough, so there is no need to wear it down even more.
+              * `DAILY_LIMIT` - If a model has a maximum allowed mowing time per day, this restriction will apply when that time has run out.
+              * `FOTA` - When a Fota update is being transferred to the mower, we want to remain in the charging station to ensure that the transfer is successful. The restriction is removed when the transfer is done.
+              * `FROST` - The frost sensor thinks it is too cold to mow.
+              * `ALL_WORK_AREAS_COMPLETED` - All work areas are completed.
+              * `EXTERNAL` - An external reason set by an external tool. Can be IFTTT, Google Assistant or Amazon Alexa. See externalReason for more information
+        externalReason:
+          type: integer
+          format: int32
+          example: 4000
+          description: >
+            External reason is a code for why the mower has been restricted with the reason EXTERNAL. The external reason is a restriction set by an external integration when parking the mower. External reason can be set by i.e. IFTTT, Google Assistant or Amazon Alexa. Ranges:
+              * `1000 - 1999` - Google Assistant.
+              * `2000 - 2999` - Amazon Alexa.
+              * `3000 - 3999` - Home Assistant.
+              * `4000` - IFTTT, Wildlife consideration.
+              * `4001` - IFTTT, Frost & rain guard.
+              * `4002` - IFTTT, Calendar connection.
+              * `4000 - 4999` - IFTTT.
+              * `5000 - 5999` - GARDENA Smart System.
+              * `6000` - Smart routine	Rain guard
+              * `6001` - Smart routine	Frost guard.
+              * `6500` - Smart routine	Wildlife protection.
+              * `6000 - 6999` - Smart routine.
+              * `100 000 - 199 999` - IFTTT applets.
+              * `200 000 - 299 999` - Developer Portal.
+      required:
+        - nextStartTimestamp
+        - restrictedReason
+
+    Metadata:
+      type: object
+      additionalProperties: false
+      description: Information if the mower is connected to the cloud and when last status was reported by the mower to the cloud.
+      properties:
+        connected:
+          type: boolean
+          example: true
+          description: Is the mower currently connected to the cloud. The mower needs to be connected to send command to the mower.
+        statusTimestamp:
+          type: integer
+          format: int64
+          example: 0
+          description: >-
+            Timestamp for the last status update in milliseconds since 1970-01-01T00:00:00 in UTC time.
+            NOTE! This timestamp is generated in the backend and not from the Mower.
+      required:
+        - connected
+        - statusTimestamp
+
+    WorkAreas:
+      type: array
+      description: List of all work areas if supported by the Automower®. If empty list, no work areas are created. By default there should be a default work area with id 0.
+      items:
+        $ref: '#/components/schemas/WorkArea'
+
+    WorkArea:
+      type: object
+      additionalProperties: false
+      description: >-
+        A work area is part of your lawn that can be scheduled separately and assigned its own cutting height.
+        The schedule and cutting height set for the work area only applies to this area and only when the mower is operating according to the work area schedule.
+        Work areas are created and managed in the Automower® Connect app. In the app you add, edit or delete a work area. You can also name the area, set schedule and cutting height.
+      properties:
+        workAreaId:
+          type: integer
+          format: int64
+          minimum: 0
+          example: 123456
+        name:
+          type: string
+          example: Front lawn
+          description: Name of the work area
+        cuttingHeight:
+          type: integer
+          example: 50
+          minimum: 0
+          maximum: 100
+          description: Cutting height in percent. 0-100
+        enabled:
+          type: boolean
+          example: true
+          description: If the work area is enabled or disabled.
+        progress:
+          type: integer
+          example: 50
+          minimum: 0
+          maximum: 100
+          description: The progress on a work are. Only available for EPOS mowers and systematic mowing work areas. See https://www.husqvarna.com/uk/support/husqvarna-self-service/what-is-systematic-mowing-ka-70248/
+        lastTimeCompleted:
+          type: integer
+          format: int64
+          example: 1723449269
+          description: Timestamp in seconds from 1970-01-01 when the work area was last completed. The timestamp is in local time on the mower. Only available for EPOS mowers and systematic mowing work areas. See https://www.husqvarna.com/uk/support/husqvarna-self-service/what-is-systematic-mowing-ka-70248/
+
+    Positions:
+      type: array
+      description: List of the GPS positions. Latest registered position is first in the array and the oldest last in the array. Max number of positions is 50 after that the latest position is removed from the array.
+      items:
+        $ref: '#/components/schemas/Position'
+
+    Position:
+      type: object
+      additionalProperties: false
+      description: A coordinate of the mower.
+      properties:
+        latitude:
+          type: number
+          example: 57.79051
+        longitude:
+          type: number
+          example: 14.28367
+    
+    Settings:
+      type: object
+      additionalProperties: false
+      description: Information about the settings
+      allOf:
+        - $ref: '#/components/schemas/CuttingHeight'
+        - $ref: '#/components/schemas/Headlight'
+        - $ref: '#/components/schemas/Timer'
+
+    CuttingHeight:
+      type: object
+      description: Information about the cutting height.
+      properties:
+        cuttingHeight:
+          type: integer
+          example: 7
+          minimum: 1
+          maximum: 9
+          description: Selected cutting height, Range:1-9
+
+    Headlight:
+      type: object
+      properties:
+        headlight:
+          type: object
+          additionalProperties: false
+          description: Information about headlights. Not all Automower® models supports headlight and not all enums are available for all models.
+          properties:
+            mode:
+              type: string
+              example: ALWAYS_ON
+              enum:
+                - ALWAYS_ON
+                - ALWAYS_OFF
+                - EVENING_ONLY
+                - EVENING_AND_NIGHT
+              description: >
+                Mode:
+                  * `ALWAYS_ON` - Always on.
+                  * `ALWAYS_OFF` - Always off.
+                  * `EVENING_ONLY` - Only in the evening.
+                  * `EVENING_AND_NIGHT` - In evening and night.
+          required:
+            - mode
+
+    Timer:
+      type: object
+      description: Date and time in seconds from 1970-01-01 in the mower. Time zone is used to format the date and time correctly in the cloud before sending the date and time to the mower. Time zone is only required for some mowers. If your mower supports work areas the time zone will be ignored, since its not is neccassary. The timestamp is used by the mower to trigger the schedule. At the moment you can not get the timestamp from the mower.
+      properties:
+        dateTime:
+          type: integer
+          format: int64
+          example: 1723449269
+          description: Timestamp in seconds from 1970-01-01. The timestamp needs to be in 24 hours from UTC time.
+        timeZone:
+          type: string
+          example: Europe/Stockholm
+          description: Time zone needed for mowers that don't support work areas. The time zone can be a time zone or GMT +- offset i.e. GMT+2. It's recommended to use a time zone to auto adjust for daylight saving time (DST).
+
+    Messages:
+      type: object
+      additionalProperties: false
+      description: >
+        A list of messages if supported by the Automower®. Messages are generated by the Automower® with different severity.
+      properties:
+        messages:
+          type: array
+          description: List of all messages for the Automower®.
+          items:
+            $ref: '#/components/schemas/Message'
+
+    Message:
+      type: object
+      additionalProperties: false
+      description: >-
+        An error message with information when and where it occurred. Every message has a severity how much the error affect the Automower®.
+      properties:
+        time:
+          type: integer
+          format: int64
+          example: 1724158848
+          description: >-
+            Timestamp for the message in milliseconds since 1970-01-01T00:00:00 in local time.
+            NOTE! This timestamp is in local time for the mower and is coming directly from the Automower®.
+        code:
+          type: integer
+          example: 49
+          description: The error code. Please see https://developer.husqvarnagroup.cloud/apis/automower-connect-api?tab=status%20description%20and%20error%20codes for details
+        severity:
+          type: string
+          example: WARNING
+          description: The severity of the error message.
+          enum:
+            - FATAL
+            - ERROR
+            - WARNING
+            - INFO
+            - DEBUG
+            - SW
+            - UNKNOWN
+        latitude:
+          type: number
+          format: double
+          example: 58.3855176
+          description: Only available if the message has a position.
+        longitude:
+          type: number
+          format: double
+          example: 15.4201136
+          description: Only available if the message has a position.
+      required:
+        - time
+        - code
+        - severity
+
+    Statistics:
+      type: object
+      additionalProperties: false
+      description: Information about the statistics. If a value is missing the mower does not support the value.
+      properties:
+        cuttingBladeUsageTime: 
+          type: number
+          format: int64
+          description: The number of seconds since the last reset of the cutting blade usage counter.
+          minimum: 0
+          example: 16526
+        downTime: 
+          type: number
+          format: int64
+          description: The number of seconds the mower has been disconnected from the cloud. Not available on all models.
+          minimum: 0
+          example: 123
+        numberOfChargingCycles:
+          type: number
+          format: int32
+          description: Number of charging cycles.
+          minimum: 0
+          example: 31
+        numberOfCollisions:
+          type: number
+          format: int32
+          description: The total number of collisions.
+          minimum: 0
+          example: 14641
+        totalChargingTime:
+          type: number
+          format: int64
+          description: Total charging time in seconds.
+          minimum: 0
+          example: 8412
+        totalCuttingTime:
+          type: number
+          format: int64
+          description: Total cutting time in seconds.
+          minimum: 0
+          example: 120505
+        totalDriveDistance:
+          type: number
+          format: int64
+          description: Total drive distance in meters. It's a calculated value based on totalRunningTime multiply with average speed for the mower depending on the model.
+          minimum: 0
+          example: 195000
+        totalRunningTime:
+          type: number
+          format: int64
+          description: The total running time in seconds. (the wheel motors have been running)
+          minimum: 0
+          example: 181939
+        totalSearchingTime:
+          type: number
+          format: int64
+          description: The total searching time in seconds.
+          minimum: 0
+          example: 32305
+        upTime: 
+          type: number
+          format: int64
+          description: The number of seconds the mower has been connected to the cloud.
+          minimum: 0
+          example: 4567
+
+    StayOutZones:
+      type: object
+      additionalProperties: false
+      description: >
+        Information about stay-out zones if supported by the Automower®. Stay-out zones are managed in the Automower® Connect app. To create a stay-out zone you need to use the Automower® Connect app. 
+         You can create stay-out zones around areas of your lawn that you do not want the mower to enter: for example, if you have an area with newly sown grass or beautiful spring flowers. The stay-out zone can be activated or deactivated, but not scheduled.
+      properties:
+        dirty:
+          type: boolean
+          example: false
+          description: If the stay-out zones are synchronized with the Husqvarna cloud. If the map is dirty you can not enable or disable a stay-out zone.
+        zones:
+          type: array
+          description: List of all stay-out zones for the Automower®.
+          items:
+            $ref: '#/components/schemas/StayOutZone'
+
+    StayOutZone:
+      type: object
+      additionalProperties: false
+      description: >-
+        A stay-out zone is an area that you can use to protect an area on you lawn. The Automower® will not access the are when the zone is enabled.
+      properties:
+        id:
+          type: string
+          format: uuid
+          pattern: \b[0-9a-f]{8}\b-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-\b[0-9a-f]{12}\b
+          example: 81C6EEA2-D139-4FEA-B134-F22A6B3EA403
+        name:
+          type: string
+          example: Springflowers
+          description: Name of stay-out zone
+        enabled:
+          type: boolean
+          example: true
+          description: If the stay-out zone is enabled, the Automower® will not access the zone.
+
+    WorkAreaData:
+      type: object
+      additionalProperties: false
+      description: A work area data object with data for a work area.
+      allOf:
+        - $ref: '#/components/schemas/WorkArea'
+        - properties:
+            calendar:
+              $ref: '#/components/schemas/CalendarWorkArea'
+
+    JsonApiAction:
+      type: object
+      additionalProperties: false
+      properties:
+        type:
+          type: string
+      required:
+        - type
+
+    Start:
+      allOf:
+      - $ref: '#/components/schemas/JsonApiAction'
+      - type: object
+        properties:
+          attributes:
+            $ref: '#/components/schemas/DurationAttributes'
+        required:
+          - attributes
+        description: Start the mower for a period of minutes
+        example:
+          type: 'Start'
+          attributes:
+            duration: 30
+    
+    StartInWorkArea:
+      allOf:
+      - $ref: '#/components/schemas/JsonApiAction'
+      - type: object
+        properties:
+          attributes:
+            $ref: '#/components/schemas/WorkAreaAttributes'
+        required:
+          - attributes
+        description: Start the mower in a work area for a period of minutes. If duration is skipped the mower will continue forever.
+        example:
+          type: 'StartInWorkArea'
+          attributes:
+            duration: 30
+            workAreaId: 123456
+
+    ResumeSchedule:
+      allOf:
+      - $ref: '#/components/schemas/JsonApiAction'
+      - type: object
+      - additionalProperties: false
+      - description: Removes any override on the Planner and let the mower resume to the schedule set by the Calendar
+      - example:
+          type: 'ResumeSchedule'
+
+    Pause:
+      allOf:
+      - $ref: '#/components/schemas/JsonApiAction'
+      - type: object
+      - additionalProperties: false
+      - description: Pause the mower
+      - example:
+          type: 'Pause'
+
+    Park:
+      allOf:
+      - $ref: '#/components/schemas/JsonApiAction'
+      - type: object
+        properties:
+          attributes:
+            anyOf:
+              - $ref: '#/components/schemas/DurationAttributes'
+              - $ref: '#/components/schemas/ExternalReasonAttributes'
+        required:
+          - attributes
+        description: Parks the mower for a period of minutes. The mower will drive to the charging station and park for the duration set by the command. If external reason is set the mower will be parked with an external reason. The external reason can be used to set the reason for the parking when you have more than one integration to the API.
+        example:
+          type: 'Park'
+          attributes:
+            duration: 30
+            externalReason: 200 000
+
+    ParkUntilNextSchedule:
+      allOf:
+      - $ref: '#/components/schemas/JsonApiAction'
+      - type: object
+      - additionalProperties: false
+      - example:
+          type: 'ParkUntilNextSchedule'
+
+    ParkUntilFurtherNotice:
+      allOf:
+      - $ref: '#/components/schemas/JsonApiAction'
+      - type: object
+      - additionalProperties: false
+      - description: Parks the mower for ever. Needs to be manually started again. When mower is parked until further notice, mode will be set to HOME
+      - example:
+          type: 'ParkUntilFurtherNotice'
+      
+    DurationAttributes:
+      type: object
+      additionalProperties: false
+      description: Duration for the command in minutes.
+      properties:
+        duration:
+          type: integer
+          description: Time in minutes between 1 - 65,000. If external reason is set the max duration is 1,500 minutes. If higher duration is needed you need to set the duration again or not set external reason.
+          format: int64
+      required:
+        - duration
+    ExternalReasonAttributes:
+      type: object
+      additionalProperties: false
+      description: External reason for parking the mower with a duration. The external reason is only available if the mower support work areas. Else the external reason will be ignored. The exernal reason will be automatically removed after 25 hours.
+      properties:
+        externalReason:
+          type: integer
+          description: A number in the range 200 000 - 299 999 to set the external reason source. See externalReason in the Planner for more information.
+          format: int64
+      required:
+        - externalReason
+
+    WorkAreaAttributes:
+      type: object
+      additionalProperties: false
+      properties:
+        duration:
+          type: integer
+          description: Duration period in minutes.
+          format: int64
+        workAreaId:
+          type: integer
+          description: Id on the work area
+          format: int64
+      required:
+        - duration
+        - workAreaId
+
+  requestBodies:
+    Action:
+      description: A single action
+      required: true
+      content:
+        application/vnd.api+json:
+          schema:
+            type: object
+            additionalProperties: false
+            properties:
+              data:
+                oneOf:
+                  - $ref: '#/components/schemas/Start'
+                  - $ref: '#/components/schemas/StartInWorkArea'
+                  - $ref: '#/components/schemas/ResumeSchedule'
+                  - $ref: '#/components/schemas/Pause'
+                  - $ref: '#/components/schemas/Park'
+                  - $ref: '#/components/schemas/ParkUntilNextSchedule'
+                  - $ref: '#/components/schemas/ParkUntilFurtherNotice'
+                discriminator:
+                  propertyName: type
+            required:
+              - data
+          example: |
+            {
+            	"data": {
+            		"type": "Start",
+            		"attributes": {
+            			"duration": 10
+            		}
+            	}
+            }
+
+    Calendar:
+      description: A calendar with all tasks
+      required: true
+      content:
+        application/vnd.api+json:
+          schema:
+            type: object
+            additionalProperties: false
+            properties:
+              data:
+                type: object
+                additionalProperties: false
+                properties:
+                  attributes:
+                    properties:
+                      tasks:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/CalendarTask'
+                    required:
+                      - tasks
+                required:
+                  - attributes
+            required:
+              - data
+          example: |
+            {
+            	"data": {
+            		"type": "calendar",
+            		"attributes": {
+            			"tasks": [ {
+                    "start": 300,
+                    "duration": 360,
+                    "monday": false,
+                    "tuesday": true,
+                    "wednesday": false,
+                    "thursday": false,
+                    "friday": false,
+                    "saturday": false,
+                    "sunday": false
+                  }]
+            		}
+            	}
+            }
+
+    CalendarWorkArea:
+      description: A calendar with all tasks for a work area
+      required: true
+      content:
+        application/vnd.api+json:
+          schema:
+            type: object
+            additionalProperties: false
+            properties:
+              data:
+                type: object
+                additionalProperties: false
+                properties:
+                  attributes:
+                    properties:
+                      tasks:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/CalendarTaskWorkArea'
+                    required:
+                      - tasks
+                required:
+                  - attributes
+            required:
+              - data
+          example: |
+            {
+            	"data": {
+            		"type": "calendar",
+            		"attributes": {
+            			"tasks": [ {
+                    "start": 300,
+                    "duration": 360,
+                    "monday": false,
+                    "tuesday": true,
+                    "wednesday": false,
+                    "thursday": false,
+                    "friday": false,
+                    "saturday": false,
+                    "sunday": false,
+                    "workAreaId": 123456
+                  }]
+            		}
+            	}
+            }
+    Settings:
+      description: Settings to update
+      required: true
+      content:
+        application/vnd.api+json:
+          schema:
+            type: object
+            additionalProperties: false
+            properties:
+              data:
+                type: object
+                additionalProperties: false
+                properties:
+                  attributes:
+                    anyOf:
+                      - $ref: '#/components/schemas/CuttingHeight'
+                      - $ref: '#/components/schemas/Timer'
+                      - $ref: '#/components/schemas/Headlight'
+                required:
+                  - attributes
+            required:
+              - data
+          example: |
+            {
+            	"data": {
+            		"type": "settings",
+            		"attributes": {
+            			"cuttingHeight": 6,
+            			"timer": {
+                    "dateTime": 1733325254,
+                    "timeZone": "Europe/Stockholm"
+                  },
+                  "headlight": {
+                   "mode": "ALWAYS_ON"
+                  }
+            		}
+            	}
+            }
+    
+    StayOutZone:
+      description: Body for stay-out zone to enable or disable
+      required: true
+      content:
+        application/vnd.api+json:
+          schema:
+            type: object
+            additionalProperties: false
+            properties:
+              data:
+                type: object
+                additionalProperties: false
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                    pattern: \b[0-9a-f]{8}\b-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-\b[0-9a-f]{12}\b
+                    maxLength: 36
+                  type:
+                    enum:
+                      - stayOutZone
+                  attributes:
+                    properties:
+                      enable:
+                        type: boolean
+                    required:
+                      - enable
+                required:
+                  - id
+                  - type
+                  - attributes
+            required:
+              - data
+          example: |
+            {
+            	"data": {
+            		"type": "stayOutZone",
+                "id": "81C6EEA2-D139-4FEA-B134-F22A6B3EA403",
+            		"attributes": {
+            			"enable": true
+            		}
+            	}
+            }
+
+    WorkArea:
+      description: Body for work area to update cutting height
+      required: true
+      content:
+        application/vnd.api+json:
+          schema:
+            type: object
+            additionalProperties: false
+            properties:
+              data:
+                type: object
+                additionalProperties: false
+                properties:
+                  id:
+                    type: integer
+                    format: int32
+                    minimum: 0
+                    example: 12345
+                  type:
+                    enum:
+                      - workArea
+                  attributes:
+                    properties:
+                      cuttingHeight:
+                        type: integer
+                        minimum: 0
+                        maximum: 100
+                      enable:
+                        type: boolean
+
+                required:
+                  - id
+                  - type
+                  - attributes
+            required:
+              - data
+          example: |
+            {
+            	"data": {
+            		"type": "workArea",
+                "id": 123,
+            		"attributes": {
+            			"cuttingHeight": 50,
+                  "enable": true
+            		}
+            	}
+            }
+ 
+  responses:
+    SingleMower:
+      description: 'Success, response body contains data. Empty if valid mower id but mower id could not be found'
+      content: 
+        application/vnd.api+json:
+          schema:
+            $ref: '#/components/schemas/JsonApiDataDocument'
+    
+    MultipleMowers:
+      description: 'Success, response body contains data.'
+      content:
+        application/vnd.api+json:
+          schema:
+            $ref: '#/components/schemas/JsonApiDataListDocument'
+    
+    SingleMowerMessages:
+      description: 'Success, response body contains data. Empty list if valid mower id but no messages could be be found'
+      content: 
+        application/vnd.api+json:
+          schema:
+            $ref: '#/components/schemas/JsonApiDataDocumentMessages'
+
+    SingleMowerStayOutZones:
+      description: 'Success, response body contains data. Empty list if valid mower id but no stay out zones could be be found'
+      content: 
+        application/vnd.api+json:
+          schema:
+            $ref: '#/components/schemas/JsonApiDataDocumentStayOutZones'
+
+    SingleMowerWorkAreas:
+      description: 'Success, response body contains data. Empty if valid mower id but mower id could not be found'
+      content: 
+        application/vnd.api+json:
+          schema:
+            $ref: '#/components/schemas/JsonApiDataListDocumentWorkAreas'
+
+    SingleMowerWorkArea:
+      description: 'Success, response body contains data. Empty if valid mower id but work area could not be found'
+      content: 
+        application/vnd.api+json:
+          schema:
+            $ref: '#/components/schemas/JsonApiDataDocumentWorkArea'
+
+    MowerCommandAccepted:
+      description: 'The action was accepted and is being processed, response body contains data.'
+      content:
+        application/vnd.api+json:
+          schema:
+            $ref: '#/components/schemas/JsonApiDataDocumentCommandResult'
+
+    MowerCommandListAccepted:
+      description: 'The action was accepted and is being processed, response body contains data.'
+      content:
+        application/vnd.api+json:
+          schema:
+            $ref: '#/components/schemas/JsonApiDataDocumentListCommandResult'
+
+    BadRequest:
+      description: 'Failure, bad request.'
+      content: 
+        application/vnd.api+json:
+          schema:
+            $ref: '#/components/schemas/JsonApiErrorDocument'
+
+    UnsupportedMediaType:
+      description: 'Media not supported.'
+      content: 
+        application/vnd.api+json:
+          schema:
+            $ref: '#/components/schemas/JsonApiErrorDocument'
+
+    Unauthorized:
+      description: 'Failure, unauthorized request.'
+      content: 
+        application/vnd.api+json:
+          schema:
+            $ref: '#/components/schemas/JsonApiErrorDocument'
+
+    Forbidden:
+      description: 'Failure, unauthorized request.'
+      content: 
+        application/vnd.api+json:
+          schema:
+            $ref: '#/components/schemas/JsonApiErrorDocument'
+
+    NotFound:
+      description: 'Failure, requested resource not found.'
+      content: 
+        application/vnd.api+json:
+          schema:
+            $ref: '#/components/schemas/JsonApiErrorDocument'
+
+    InternalServerError:
+      description: 'Error, unknown internal server error.'
+      content: 
+        application/vnd.api+json:
+          schema:
+            $ref: '#/components/schemas/JsonApiErrorDocument'
+
+    ServiceUnavailable:
+      description: 'Error, unavailable internal server.'
+      content: 
+        application/vnd.api+json:
+          schema:
+            $ref: '#/components/schemas/JsonApiErrorDocument'
+
+  securitySchemes:
+    APIKeyHeader:
+      type: apiKey
+      in: header
+      name: X-Api-Key
+      description: REQUIRED. The key obtained from the Husqvarna Group, specific to your application.
+    Token:
+      type: apiKey
+      in: header
+      name: Authorization
+      description: REQUIRED. Header value should be set to [Bearer <token>].
+    Provider:
+      type: apiKey
+      in: header
+      name: Authorization-Provider
+      description: REQUIRED. Bearer type auth. The only supported value is currently "husqvarna".

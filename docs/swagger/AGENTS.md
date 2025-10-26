@@ -1,0 +1,1 @@
+This is the OpenAPI specification for the Husqvarna Automower Connect API.
