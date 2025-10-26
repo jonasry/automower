@@ -15,7 +15,7 @@ const severitySymbols = new Map([
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 try {
-  const messagesPath = path.resolve(__dirname, '../messages.txt');
+  const messagesPath = path.resolve(__dirname, '../docs/swagger/messages.txt');
   const lines = fs.readFileSync(messagesPath, 'utf-8').split('\n');
   for (const line of lines) {
     const [code, desc] = line.split('\t');
