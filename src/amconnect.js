@@ -24,9 +24,10 @@ export function handleIncomingEvent(data) {
     }
 
     const shapedEvent = shapeEventForStorage(message);
+    let eventId = null;
     if (shapedEvent) {
       try {
-        storeEvent(shapedEvent);
+        eventId = storeEvent(shapedEvent);
       } catch (err) {
         console.error('Failed to persist event:', err);
       }
@@ -56,7 +57,15 @@ export function handleIncomingEvent(data) {
       const timestamp = toIsoTimestamp(attributes?.metadata?.timestamp) ?? new Date().toISOString();
 
       if (lat != null && lon != null) {
-        storePosition(mowerId, currentState?.timestamp ?? 0, currentState?.activity ?? 'UNKNOWN', lat, lon, timestamp);
+        storePosition({
+          mowerId,
+          sessionId: currentState?.timestamp ?? 0,
+          state: currentState?.activity ?? 'UNKNOWN',
+          lat,
+          lon,
+          timestamp,
+          eventId
+        });
       }
 
     } else if (type === 'message-event-v2') {

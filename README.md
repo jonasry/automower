@@ -52,7 +52,7 @@ sqlite3 db/mower-data.sqlite "SELECT event_type, event_timestamp, message_code F
 
 #### Simulating event streams
 
-When live mowing data is unavailable, you can replay recorded CSV rows (such as `data.csv`) to exercise the persistence pipeline. The replay tool generates `mower-event-v2`, `position-event-v2`, and synthetic `battery-event-v2` entries derived from the recorded session.
+When live mowing data is unavailable, you can replay recorded CSV rows (such as `data.csv`) to exercise the persistence pipeline. The replay tool generates `mower-event-v2`, `position-event-v2`, and synthetic `battery-event-v2` entries derived from the recorded session. Each stored position links back to its source event via `event_id` for easier auditing.
 
 ```bash
 npm run replay -- data.csv

@@ -8,7 +8,7 @@
 ## Current Observations
 - `public/map.html` only calls `/api/positions` and hardcodes mower selection, battery level, and session info blocks.
 - Backend state lives in `mowerStates` (`src/state.js`), populated from the initial REST call in `src/app.js` and updated by WebSocket events in `src/amconnect.js`, but only tracks `activity`, `mowerName`, and a timestamp.
-- Session data is implied via the `session_id` column in SQLite (`src/db.js`), and a new `events` table now stores raw Automower payloads (activity, messages, timestamps) that we can tap for richer status views, but there is still no API surface for aggregated metadata.
+- Session data is implied via the `session_id` column in SQLite (`src/db.js`). Each `positions` row includes an `event_id` foreign key pointing back to the corresponding raw payload in the `events` table, letting us audit positions, messages, and timestamps together without duplication. We can tap this linkage for richer status views, but there is still no API surface for aggregated metadata.
 
 ## Backend Work
 1. **Enrich tracked mower state**
@@ -18,7 +18,7 @@
    - OpenAPI document available in docs/swagger/amconnect.yml.
 
 2. **Derive session summaries**
-   - Add a helper in `src/db.js` (or a dedicated module) to group persisted data by `mower_id` and `session_id`, combining `positions` rows with relevant `events` to return start/end timestamps, duration, point counts, and notable status messages.
+   - Add a helper in `src/db.js` (or a dedicated module) to group persisted data by `mower_id` and `session_id`, combining `positions` rows (joined back through `event_id` to `events`) to return start/end timestamps, duration, point counts, and notable status messages.
    - Consider exposing the most recent N sessions per mower, ordered newest-first, so the UI can populate the session drop-down while keeping responses small.
 
 3. **Expose a status API**
@@ -29,7 +29,7 @@
        "sessions": {"<mowerId>": [{"id":1702564023456,"start":"...","end":"...","durationMinutes":42,"points":138,"messages":[{"code":713,"severity":"WARNING","time":"..."}]}]}
      }
      ```
-   - Bubble up last message severity, charging events, or error states by reading the persisted `events` table, while keeping the live mower snapshot lean.
+   - Bubble up last message severity, charging events, or error states by reading the persisted `events` table (and the linked `positions` rows when geo context matters), while keeping the live mower snapshot lean.
    - Keep responses cacheable for a few seconds (matching the heat endpoint) and handle empty data gracefully.
 
 4. **Wire session selection to heat data**
