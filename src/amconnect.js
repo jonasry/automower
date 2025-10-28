@@ -3,14 +3,14 @@ import { storePosition, storeEvent } from './db.js';
 import { mowerStates } from './state.js';
 import { getToken } from './auth.js'
 import { messageDescriptions, severitySymbols } from './amcmessages.js'
-import { shapeEventForStorage } from './events.js';
+import { shapeEventForStorage, toIsoTimestamp } from './events.js';
 
 let pingInterval = null;
 let reconnectTimer = null;
 let reconnectAttempts = 0;
 let wss = null;
 
-function handleIncomingEvent(data) {
+export function handleIncomingEvent(data) {
   if (!data.length) return;
 
   try {
@@ -43,16 +43,17 @@ function handleIncomingEvent(data) {
       const activity = attributes?.mower?.activity;
       if (activity) {
         if (activity != currentState?.activity) {
-          const timestamp = Date.now();
-          console.log(`📍 Activity changed for ${mowerName} (${mowerIdShort}): ${activity} at ${new Date(timestamp).toISOString()}`);
-          mowerStates.set(mowerId, { activity, mowerName, timestamp });
+          const activityTimestampIso = toIsoTimestamp(attributes?.metadata?.timestamp) ?? new Date().toISOString();
+          const activityTimestampMs = Date.parse(activityTimestampIso);
+          console.log(`📍 Activity changed for ${mowerName} (${mowerIdShort}): ${activity} at ${activityTimestampIso}`);
+          mowerStates.set(mowerId, { activity, mowerName, timestamp: Number.isNaN(activityTimestampMs) ? Date.now() : activityTimestampMs });
         }
       }
 
     } else if (type === 'position-event-v2') {
       const lat = attributes?.position?.latitude;
       const lon = attributes?.position?.longitude;
-      const timestamp = attributes?.metadata?.timestamp || new Date().toISOString();
+      const timestamp = toIsoTimestamp(attributes?.metadata?.timestamp) ?? new Date().toISOString();
 
       if (lat != null && lon != null) {
         storePosition(mowerId, currentState?.timestamp ?? 0, currentState?.activity ?? 'UNKNOWN', lat, lon, timestamp);
@@ -61,14 +62,14 @@ function handleIncomingEvent(data) {
     } else if (type === 'message-event-v2') {
       const lat = attributes?.message?.latitude;
       const lon = attributes?.message?.longitude;
-      const timestamp = attributes?.message?.time || 0;
+      const timestampIso = toIsoTimestamp(attributes?.message?.time) ?? new Date().toISOString();
       const code = attributes?.message?.code;
       const severity = attributes?.message?.severity;
 
       const emoji = severitySymbols.get(severity) || '📍';
       const desc = messageDescriptions.get(code) || 'Unknown message';
 
-      console.log(`${emoji} Message from ${mowerName} (${mowerIdShort}): ${severity} "${code} ${desc}" at ${new Date(timestamp * 1000).toISOString()} [${lat}, ${lon}]`);
+      console.log(`${emoji} Message from ${mowerName} (${mowerIdShort}): ${severity} "${code} ${desc}" at ${timestampIso} [${lat}, ${lon}]`);
     }
 
   } catch (err) {

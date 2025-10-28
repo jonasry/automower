@@ -50,6 +50,22 @@ To manually verify ingestion while developing, point `sqlite3` at the database a
 sqlite3 db/mower-data.sqlite "SELECT event_type, event_timestamp, message_code FROM events ORDER BY id DESC LIMIT 5;"
 ```
 
+#### Simulating event streams
+
+When live mowing data is unavailable, you can replay recorded CSV rows (such as `data.csv`) to exercise the persistence pipeline. The replay tool generates `mower-event-v2`, `position-event-v2`, and synthetic `battery-event-v2` entries derived from the recorded session.
+
+```bash
+npm run replay -- data.csv
+```
+
+The script feeds events through the normal WebSocket handler, so both `positions` and `events` tables are populated exactly as they would be in production. By default, each replay stamps events with the current timestamp so multiple runs create fresh rows; pass `--use-recorded-timestamps` if you need to preserve the original values from the CSV.
+
+Pass `--real-time` to keep the original pacing between events (use `--speed=30` to accelerate, or `--max-delay=0` to disable clamping):
+
+```bash
+npm run replay -- --real-time --speed=30 data.csv
+```
+
 ## Docker
 
 You can build a Docker image for the application with the included `Dockerfile`:

@@ -1,4 +1,4 @@
-function toIsoTimestamp(value) {
+export function toIsoTimestamp(value) {
   if (value == null) return null;
 
   if (typeof value === 'number' && Number.isFinite(value)) {
