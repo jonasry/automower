@@ -1,8 +1,8 @@
 import WebSocket from 'ws';
 import { storePosition, storeEvent } from './db.js';
-import { mowerStates } from './state.js';
-import { getToken } from './auth.js'
-import { messageDescriptions, severitySymbols } from './amcmessages.js'
+import { getMowerState, updateMowerState } from './state.js';
+import { getToken } from './auth.js';
+import { messageDescriptions, severitySymbols } from './amcmessages.js';
 import { shapeEventForStorage, toIsoTimestamp } from './events.js';
 
 let pingInterval = null;
@@ -25,7 +25,9 @@ export function handleIncomingEvent(data) {
 
     const shapedEvent = shapeEventForStorage(message);
     let eventId = null;
+    let eventTimestampIso = null;
     if (shapedEvent) {
+      eventTimestampIso = shapedEvent.eventTimestamp;
       try {
         eventId = storeEvent(shapedEvent);
       } catch (err) {
@@ -37,8 +39,9 @@ export function handleIncomingEvent(data) {
     if (!type || !attributes || !mowerId) return;
 
     const mowerIdShort = mowerId.substring(0, 8);
-    const currentState = mowerStates.get(mowerId);
-    const mowerName = currentState?.mowerName || "Unknown";
+    const currentState = getMowerState(mowerId);
+    const mowerName = currentState?.mowerName || 'Unknown';
+    const lastEventTimestamp = eventTimestampIso ?? shapedEvent?.receivedAt ?? new Date().toISOString();
 
     if (type === 'mower-event-v2') {
       const activity = attributes?.mower?.activity;
@@ -47,8 +50,21 @@ export function handleIncomingEvent(data) {
           const activityTimestampIso = toIsoTimestamp(attributes?.metadata?.timestamp) ?? new Date().toISOString();
           const activityTimestampMs = Date.parse(activityTimestampIso);
           console.log(`📍 Activity changed for ${mowerName} (${mowerIdShort}): ${activity} at ${activityTimestampIso}`);
-          mowerStates.set(mowerId, { activity, mowerName, timestamp: Number.isNaN(activityTimestampMs) ? Date.now() : activityTimestampMs });
+          const sessionId = Number.isNaN(activityTimestampMs) ? Date.now() : activityTimestampMs;
+          updateMowerState(mowerId, {
+            mowerName,
+            activity,
+            sessionId,
+            lastActivityAt: activityTimestampIso,
+            lastEventAt: lastEventTimestamp,
+            isCharging: activity === 'CHARGING'
+          });
         }
+      } else {
+        updateMowerState(mowerId, {
+          mowerName,
+          lastEventAt: lastEventTimestamp
+        });
       }
 
     } else if (type === 'position-event-v2') {
@@ -57,14 +73,23 @@ export function handleIncomingEvent(data) {
       const timestamp = toIsoTimestamp(attributes?.metadata?.timestamp) ?? new Date().toISOString();
 
       if (lat != null && lon != null) {
+        const sessionId = currentState?.sessionId ?? currentState?.timestamp ?? Date.now();
+        const state = currentState?.activity ?? 'UNKNOWN';
+
         storePosition({
           mowerId,
-          sessionId: currentState?.timestamp ?? 0,
-          state: currentState?.activity ?? 'UNKNOWN',
+          sessionId,
+          state,
           lat,
           lon,
           timestamp,
           eventId
+        });
+
+        updateMowerState(mowerId, {
+          mowerName,
+          lastPosition: { lat, lon, timestamp, eventId },
+          lastEventAt: lastEventTimestamp
         });
       }
 
@@ -72,13 +97,41 @@ export function handleIncomingEvent(data) {
       const lat = attributes?.message?.latitude;
       const lon = attributes?.message?.longitude;
       const timestampIso = toIsoTimestamp(attributes?.message?.time) ?? new Date().toISOString();
-      const code = attributes?.message?.code;
-      const severity = attributes?.message?.severity;
+      const code = attributes?.message?.code ?? null;
+      const severity = attributes?.message?.severity ?? null;
 
       const emoji = severitySymbols.get(severity) || '📍';
-      const desc = messageDescriptions.get(code) || 'Unknown message';
+      const desc = code != null ? (messageDescriptions.get(code) || 'Unknown message') : 'Message event';
 
       console.log(`${emoji} Message from ${mowerName} (${mowerIdShort}): ${severity} "${code} ${desc}" at ${timestampIso} [${lat}, ${lon}]`);
+
+      updateMowerState(mowerId, {
+        mowerName,
+        lastEventAt: lastEventTimestamp ?? timestampIso,
+        lastMessage: code != null || severity != null ? {
+          code,
+          severity,
+          description: desc,
+          timestamp: timestampIso,
+          lat,
+          lon
+        } : currentState?.lastMessage
+      });
+
+    } else if (type === 'battery-event-v2') {
+      const pctRaw = attributes?.battery?.batteryPercent;
+      const pct = typeof pctRaw === 'number' ? Math.round(pctRaw) : pctRaw;
+      updateMowerState(mowerId, {
+        mowerName,
+        batteryPercent: Number.isFinite(pct) ? Math.max(0, Math.min(100, pct)) : null,
+        lastBatteryAt: lastEventTimestamp,
+        lastEventAt: lastEventTimestamp
+      });
+    } else {
+      updateMowerState(mowerId, {
+        mowerName,
+        lastEventAt: lastEventTimestamp
+      });
     }
 
   } catch (err) {
