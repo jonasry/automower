@@ -34,12 +34,15 @@
     .brand .name { font-size: 1.25em; }
     .brand select { background: var(--bg-elev); color: var(--fg); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; }
 
-    .status { display: flex; align-items: center; gap: 10px; color: var(--fg); }
+    .status { display: flex; align-items: center; gap: 16px; color: var(--fg); }
+    .status .meta { display: flex; flex-direction: column; align-items: flex-end; line-height: 1.2; }
     .battery { display: inline-flex; align-items: center; gap: 8px; }
     .battery-icon { position: relative; width: 36px; height: 16px; border: 2px solid #e5e7eb; border-radius: 3px; box-sizing: border-box; }
     .battery-icon::after { content: ""; position: absolute; right: -5px; top: 4px; width: 3px; height: 8px; background: #e5e7eb; border-radius: 1px; }
     .battery-level { height: 100%; background: #22c55e; /* green */ width: var(--level, 50%); }
     .battery-text { min-width: 3ch; text-align: right; }
+    .activity { font-size: 0.78em; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; }
+    .updated { font-size: 0.72em; color: var(--muted); }
 
     /* Content area */
     .content { flex: 1; min-height: 0; display: flex; }
@@ -48,7 +51,9 @@
     .sidebar .field { display: flex; align-items: center; gap: 8px; }
     .sidebar select { width: 100%; background: var(--bg-elev); color: var(--fg); border: 1px solid var(--border); border-radius: 6px; padding: 8px; }
     .info { list-style: none; padding: 8px 0 0; margin: 0; color: #cbd5e1; }
-    .info li { padding: 6px 0; border-bottom: 1px dashed var(--border); }
+    .info li { padding: 6px 0; border-bottom: 1px dashed var(--border); font-size: 0.9em; }
+    .info li span { color: #e2e8f0; }
+    .muted { color: var(--muted); }
 
     .main { position: relative; flex: 1; }
     #map { position: absolute; inset: 0; width: 100%; height: 100%; }
@@ -68,8 +73,12 @@
     </div>
     <div class="status">
       <div class="battery" title="Battery">
-        <div class="battery-icon"><div class="battery-level" id="batteryLevel" style="--level:45%"></div></div>
-        <span class="battery-text" id="batteryText">45%</span>
+        <div class="battery-icon"><div class="battery-level" id="batteryLevel" style="--level:0%"></div></div>
+        <span class="battery-text" id="batteryText">—</span>
+      </div>
+      <div class="meta">
+        <span class="activity" id="activityText">No data</span>
+        <span class="updated" id="lastUpdateText">Updated —</span>
       </div>
     </div>
   </header>
@@ -84,10 +93,11 @@
       </div>
       <h2>Info</h2>
       <ul class="info" id="sessionInfo">
-        <li>Start: —</li>
-        <li>End: —</li>
-        <li>Duration: —</li>
-        <li>Points: —</li>
+        <li>Start: <span id="sessionStartValue" class="muted">—</span></li>
+        <li>End: <span id="sessionEndValue" class="muted">—</span></li>
+        <li>Duration: <span id="sessionDurationValue" class="muted">—</span></li>
+        <li>Points: <span id="sessionPointsValue" class="muted">—</span></li>
+        <li>Last message: <span id="sessionMessageValue" class="muted">—</span></li>
       </ul>
     </aside>
     <main class="main">
@@ -107,82 +117,388 @@
       0.9: '#FF7F00',
       1.0: '#FF0000'
     };
+    const STATUS_POLL_MS = 30000;
 
     // Map setup fills the main area; no explicit height calc needed.
     const map = L.map('map').setView([55.7, 13.2], 17);
+    map._boundsKey = null;
 
     // Optional tiles if desired; disabled by default to keep dark look
     // L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 20 }).addTo(map);
 
     let heatLayer = null;
     let recentLayer = null;
+    let refreshInFlight = false;
+    let statusSnapshot = null;
+    let selectedMowerId = null;
+    let selectedSessionId = 'latest';
+    let suppressSessionChange = false;
 
-    function loadData() {
-      fetch('/api/positions')
-        .then(res => res.json())
-        .then(({ heat, recent }) => {
-          if (heatLayer) map.removeLayer(heatLayer);
-          heatLayer = L.heatLayer(heat, {
-            radius: 8,
-            blur: 5,
-            maxZoom: 20,
-            gradient: defaultGradient
-          }).addTo(map);
+    const mowerNameEl = document.getElementById('mowerName');
+    const mowerPicker = document.getElementById('mowerPicker');
+    const sessionSelect = document.getElementById('sessionSelect');
+    const batteryLevelEl = document.getElementById('batteryLevel');
+    const batteryTextEl = document.getElementById('batteryText');
+    const activityTextEl = document.getElementById('activityText');
+    const lastUpdateTextEl = document.getElementById('lastUpdateText');
+    const sessionStartValue = document.getElementById('sessionStartValue');
+    const sessionEndValue = document.getElementById('sessionEndValue');
+    const sessionDurationValue = document.getElementById('sessionDurationValue');
+    const sessionPointsValue = document.getElementById('sessionPointsValue');
+    const sessionMessageValue = document.getElementById('sessionMessageValue');
 
-          if (!map._boundsFitted && heat && heat.length) {
-            const latLngs = heat.map(p => L.latLng(p[0], p[1]));
-            const bounds = L.latLngBounds(latLngs);
-            map.fitBounds(bounds);
-            map._boundsFitted = true;
-          }
+    const sessionLabelFormatter = new Intl.DateTimeFormat(undefined, {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+    const timestampFormatter = new Intl.DateTimeFormat(undefined, {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
 
-          if (recentLayer) map.removeLayer(recentLayer);
-          recentLayer = L.layerGroup();
-          const polylinePoints = [];
-          recent.forEach(([lat, lon]) => {
-            L.circleMarker([lat, lon], {
-              radius: 3,
-              color: 'indigo',
-              weight: 1,
-              fillColor: 'indigo',
-              fillOpacity: 1
-            }).addTo(recentLayer);
-            polylinePoints.push([lat, lon]);
-          });
-          if (polylinePoints.length > 1) {
-            const dashedLine = L.polyline(polylinePoints, {
-              color: 'indigo',
-              weight: 2.25,
-              dashArray: '6, 4',
-              opacity: 0.7
-            });
-            dashedLine.addTo(recentLayer);
-
-            const startPoint = polylinePoints[polylinePoints.length - 1];
-            const endPoint = polylinePoints[0];
-            L.marker(startPoint, { icon: L.divIcon({ className: 'flag-icon', html: '🟡', iconSize: [24, 24], iconAnchor: [0, 12] }) }).addTo(recentLayer);
-            L.marker(endPoint, { icon: L.divIcon({ className: 'flag-icon', html: '🟢', iconSize: [24, 24], iconAnchor: [0, 12] }) }).addTo(recentLayer);
-          }
-          recentLayer.addTo(map);
-        })
-        .catch(() => {/* noop for now */});
+    function parseTimestamp(iso) {
+      if (!iso) return null;
+      const date = new Date(iso);
+      return Number.isNaN(date.getTime()) ? null : date;
     }
 
-    loadData();
-    setInterval(loadData, 30000);
+    function resetMapFit() {
+      map._boundsKey = null;
+    }
 
-    // Placeholders for future integration
-    // updateBattery(45) will update the indicator
+    function setText(el, value, placeholder = '—') {
+      if (!el) return;
+      if (value == null || value === '') {
+        el.textContent = placeholder;
+        el.classList.add('muted');
+      } else {
+        el.textContent = value;
+        el.classList.remove('muted');
+      }
+    }
+
+    function toTitleCase(value) {
+      if (!value) return 'UNKNOWN';
+      return value
+        .toString()
+        .toLowerCase()
+        .split(/[_\s]+/)
+        .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+        .join(' ');
+    }
+
+    function formatRelativeTime(iso) {
+      const ts = Date.parse(iso ?? '');
+      if (!Number.isFinite(ts)) return 'Updated —';
+      const diffMs = Date.now() - ts;
+      if (diffMs < 0) return 'Updated just now';
+      const diffMinutes = Math.floor(diffMs / 60000);
+      if (diffMinutes < 1) return 'Updated just now';
+      if (diffMinutes < 60) return `Updated ${diffMinutes}m ago`;
+      const diffHours = Math.floor(diffMinutes / 60);
+      if (diffHours < 24) return `Updated ${diffHours}h ago`;
+      const diffDays = Math.floor(diffHours / 24);
+      return `Updated ${diffDays}d ago`;
+    }
+
+    function formatDuration(minutes) {
+      if (!Number.isFinite(minutes)) return '—';
+      if (minutes < 1) return '<1 min';
+      const hrs = Math.floor(minutes / 60);
+      const mins = Math.round(minutes % 60);
+      if (hrs === 0) return `${mins} min`;
+      if (mins === 0) return `${hrs} h`;
+      return `${hrs} h ${mins} min`;
+    }
+
+    function formatSessionOptionLabel(session) {
+      const startDate = parseTimestamp(session.start);
+      const startLabel = startDate ? sessionLabelFormatter.format(startDate) : 'Unknown';
+      const durationLabel = formatDuration(session.durationMinutes);
+      const pointsLabel = Number.isFinite(session.points) ? `${session.points} pts` : '—';
+      return `${startLabel} • ${durationLabel} • ${pointsLabel}`;
+    }
+
+    function describeMessage(msg) {
+      if (!msg) return null;
+      const parts = [];
+      const tsDate = parseTimestamp(msg.timestamp);
+      if (tsDate) {
+        const ts = timestampFormatter.format(tsDate);
+        parts.push(ts);
+      }
+      const severity = msg.severity ?? 'INFO';
+      const code = msg.code != null ? ` ${msg.code}` : '';
+      parts.push(`${severity}${code}`);
+      if (msg.description) {
+        parts.push(msg.description);
+      }
+      return parts.join(' · ');
+    }
+
     function updateBattery(pct) {
-      const clamped = Math.max(0, Math.min(100, pct|0));
-      const level = document.getElementById('batteryLevel');
-      const text = document.getElementById('batteryText');
-      level.style.setProperty('--level', clamped + '%');
-      level.style.background = clamped < 20 ? '#ef4444' : (clamped < 50 ? '#f59e0b' : '#22c55e');
-      text.textContent = clamped + '%';
+      const clamped = Number.isFinite(pct) ? Math.max(0, Math.min(100, Math.round(pct))) : null;
+      const level = clamped ?? 0;
+      batteryLevelEl.style.setProperty('--level', `${level}%`);
+      if (clamped == null) {
+        batteryLevelEl.style.background = '#475569';
+        batteryTextEl.textContent = '—';
+        batteryTextEl.classList.add('muted');
+      } else {
+        const color = clamped < 20 ? '#ef4444' : clamped < 50 ? '#f59e0b' : '#22c55e';
+        batteryLevelEl.style.background = color;
+        batteryTextEl.textContent = `${clamped}%`;
+        batteryTextEl.classList.remove('muted');
+      }
     }
-    // Example initial value
-    updateBattery(45);
+
+    function resolveSelectedSessionSummary(summaries) {
+      if (!Array.isArray(summaries) || summaries.length === 0) return null;
+      if (selectedSessionId === 'latest' || selectedSessionId == null) {
+        return summaries[0];
+      }
+      return (
+        summaries.find(session => String(session.id) === String(selectedSessionId)) ??
+        summaries[0]
+      );
+    }
+
+    function getEffectiveSessionId() {
+      const summaries = statusSnapshot?.sessions?.[selectedMowerId] ?? [];
+      const summary = resolveSelectedSessionSummary(summaries);
+      if (!summary) return null;
+      return summary.id;
+    }
+
+    function updateSessionInfo(summary, mower) {
+      const activeMessage = summary?.messages?.[0] ?? mower?.lastMessage ?? null;
+      const startDate = parseTimestamp(summary?.start);
+      const endDate = parseTimestamp(summary?.end);
+      setText(sessionStartValue, startDate ? timestampFormatter.format(startDate) : null);
+      setText(sessionEndValue, endDate ? timestampFormatter.format(endDate) : null);
+      setText(sessionDurationValue, formatDuration(summary?.durationMinutes));
+      setText(sessionPointsValue, Number.isFinite(summary?.points) ? summary.points.toLocaleString() : null);
+      const messageText = describeMessage(activeMessage);
+      setText(sessionMessageValue, messageText, '—');
+    }
+
+    function updateMowerPickerOptions(mowers) {
+      const existingIds = Array.from(mowerPicker.options).map(opt => opt.value);
+      const incomingIds = mowers.map(m => m.id);
+      const needsUpdate =
+        existingIds.length !== incomingIds.length ||
+        existingIds.some((id, index) => id !== incomingIds[index]);
+
+      if (!needsUpdate) {
+        mowerPicker.value = selectedMowerId ?? (incomingIds[0] ?? '');
+        return;
+      }
+
+      mowerPicker.innerHTML = '';
+      for (const mower of mowers) {
+        const option = document.createElement('option');
+        option.value = mower.id;
+        option.textContent = mower.name ?? mower.id;
+        mowerPicker.appendChild(option);
+      }
+      mowerPicker.disabled = mowers.length <= 1;
+      if (selectedMowerId && incomingIds.includes(selectedMowerId)) {
+        mowerPicker.value = selectedMowerId;
+      } else if (incomingIds.length) {
+        selectedMowerId = incomingIds[0];
+        mowerPicker.value = selectedMowerId;
+      } else {
+        selectedMowerId = null;
+      }
+    }
+
+    function populateSessionSelect(summaries) {
+      suppressSessionChange = true;
+      sessionSelect.innerHTML = '';
+      const latestOption = document.createElement('option');
+      latestOption.value = 'latest';
+      latestOption.textContent = 'Latest session';
+      sessionSelect.appendChild(latestOption);
+
+      for (const session of summaries) {
+        const option = document.createElement('option');
+        option.value = String(session.id);
+        option.textContent = formatSessionOptionLabel(session);
+        sessionSelect.appendChild(option);
+      }
+
+      if (selectedSessionId !== 'latest') {
+        const match = summaries.some(session => String(session.id) === String(selectedSessionId));
+        if (!match) {
+          selectedSessionId = 'latest';
+        }
+      }
+
+      sessionSelect.value = selectedSessionId ?? 'latest';
+      sessionSelect.disabled = summaries.length === 0;
+      suppressSessionChange = false;
+    }
+
+    function renderStatus() {
+      if (!statusSnapshot || !Array.isArray(statusSnapshot.mowers) || statusSnapshot.mowers.length === 0) {
+        mowerNameEl.textContent = 'No mower detected';
+        updateBattery(null);
+        activityTextEl.textContent = 'No data';
+        lastUpdateTextEl.textContent = 'Updated —';
+        mowerPicker.innerHTML = '<option value="">No mowers</option>';
+        mowerPicker.disabled = true;
+        sessionSelect.innerHTML = '<option value="latest">Latest session</option>';
+        sessionSelect.disabled = true;
+        selectedMowerId = null;
+        updateSessionInfo(null, null);
+        return;
+      }
+
+      if (!selectedMowerId || !statusSnapshot.mowers.some(mower => mower.id === selectedMowerId)) {
+        selectedMowerId = statusSnapshot.mowers[0].id;
+      }
+
+      updateMowerPickerOptions(statusSnapshot.mowers);
+
+      const activeMower = statusSnapshot.mowers.find(mower => mower.id === selectedMowerId) ?? statusSnapshot.mowers[0];
+      mowerNameEl.textContent = activeMower.name ?? activeMower.id;
+      updateBattery(activeMower.batteryPercent);
+      activityTextEl.textContent = toTitleCase(activeMower.activity);
+      if (activeMower.charging && activeMower.activity !== 'CHARGING') {
+        activityTextEl.textContent += ' (Charging)';
+      }
+      lastUpdateTextEl.textContent = formatRelativeTime(activeMower.lastUpdate);
+
+      const summaries = statusSnapshot.sessions?.[selectedMowerId] ?? [];
+      populateSessionSelect(summaries);
+      const summary = resolveSelectedSessionSummary(summaries);
+      updateSessionInfo(summary, activeMower);
+    }
+
+    async function fetchStatus() {
+      try {
+        const response = await fetch('/api/status');
+        if (!response.ok) {
+          throw new Error(`Status request failed: ${response.status}`);
+        }
+        const data = await response.json();
+        statusSnapshot = data;
+        renderStatus();
+      } catch (err) {
+        console.error('Failed to fetch status data:', err);
+      }
+    }
+
+    async function loadData() {
+      const params = new URLSearchParams();
+      if (selectedMowerId) {
+        params.set('mowerId', selectedMowerId);
+      }
+      const sessionToLoad = getEffectiveSessionId();
+      if (sessionToLoad != null) {
+        params.set('sessionId', sessionToLoad);
+      }
+
+      const url = params.toString().length ? `/api/positions?${params}` : '/api/positions';
+
+      try {
+        const response = await fetch(url);
+        if (!response.ok) {
+          throw new Error(`Positions request failed: ${response.status}`);
+        }
+        const { heat = [], recent = [] } = await response.json();
+
+        if (heatLayer) map.removeLayer(heatLayer);
+        heatLayer = L.heatLayer(heat, {
+          radius: 8,
+          blur: 5,
+          maxZoom: 20,
+          gradient: defaultGradient
+        }).addTo(map);
+
+        if (heat && heat.length) {
+          const fitKey = `${selectedMowerId || 'all'}::${sessionToLoad ?? 'latest'}`;
+          if (map._boundsKey !== fitKey) {
+            const latLngs = heat
+              .map(([lat, lon]) => Number.isFinite(lat) && Number.isFinite(lon) ? L.latLng(lat, lon) : null)
+              .filter(Boolean);
+            if (latLngs.length) {
+              map.fitBounds(L.latLngBounds(latLngs));
+              map._boundsKey = fitKey;
+            }
+          }
+        } else {
+          map._boundsKey = null;
+        }
+
+        if (recentLayer) map.removeLayer(recentLayer);
+        recentLayer = L.layerGroup();
+        const polylinePoints = [];
+        recent.forEach(([lat, lon]) => {
+          if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
+          L.circleMarker([lat, lon], {
+            radius: 3,
+            color: 'indigo',
+            weight: 1,
+            fillColor: 'indigo',
+            fillOpacity: 1
+          }).addTo(recentLayer);
+          polylinePoints.push([lat, lon]);
+        });
+        if (polylinePoints.length > 1) {
+          const dashedLine = L.polyline(polylinePoints, {
+            color: 'indigo',
+            weight: 2.25,
+            dashArray: '6, 4',
+            opacity: 0.7
+          });
+          dashedLine.addTo(recentLayer);
+
+          const startPoint = polylinePoints[polylinePoints.length - 1];
+          const endPoint = polylinePoints[0];
+          L.marker(startPoint, { icon: L.divIcon({ className: 'flag-icon', html: '🟡', iconSize: [24, 24], iconAnchor: [0, 12] }) }).addTo(recentLayer);
+          L.marker(endPoint, { icon: L.divIcon({ className: 'flag-icon', html: '🟢', iconSize: [24, 24], iconAnchor: [0, 12] }) }).addTo(recentLayer);
+        }
+        recentLayer.addTo(map);
+      } catch (err) {
+        console.error('Failed to load position data:', err);
+      }
+    }
+
+    async function refreshAll() {
+      if (refreshInFlight) return;
+      refreshInFlight = true;
+      try {
+        await fetchStatus();
+        await loadData();
+      } finally {
+        refreshInFlight = false;
+      }
+    }
+
+    mowerPicker.addEventListener('change', () => {
+      if (!mowerPicker.value) return;
+      selectedMowerId = mowerPicker.value;
+      selectedSessionId = 'latest';
+      resetMapFit();
+      renderStatus();
+      loadData();
+    });
+
+    sessionSelect.addEventListener('change', () => {
+      if (suppressSessionChange) return;
+      selectedSessionId = sessionSelect.value;
+      resetMapFit();
+      renderStatus();
+      loadData();
+    });
+
+    refreshAll();
+    setInterval(refreshAll, STATUS_POLL_MS);
   </script>
 </body>
 </html>

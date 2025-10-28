@@ -146,12 +146,60 @@ const updateEventReceivedAtStmt = db.prepare(`
   WHERE id = ?
 `);
 
-const selectStmt = db.prepare(`
-  SELECT mower_id, session_id, lat, lon, timestamp, activity
+const sessionSummaryStmt = db.prepare(`
+  SELECT
+    mower_id,
+    session_id,
+    MIN(timestamp) AS start,
+    MAX(timestamp) AS end,
+    COUNT(*) AS points
   FROM positions
-  ORDER BY mower_id, timestamp
-  `
-);
+  WHERE mower_id = ?
+    AND session_id IS NOT NULL
+  GROUP BY mower_id, session_id
+  ORDER BY MAX(timestamp) DESC
+  LIMIT ?
+`);
+
+const sessionMessagesStmt = db.prepare(`
+  SELECT
+    event_timestamp,
+    message_code,
+    message_severity
+  FROM events
+  WHERE mower_id = ?
+    AND event_type = 'message-event-v2'
+    AND event_timestamp IS NOT NULL
+    AND event_timestamp >= ?
+    AND event_timestamp <= ?
+  ORDER BY event_timestamp DESC
+  LIMIT ?
+`);
+
+const latestMessageStmt = db.prepare(`
+  SELECT
+    event_timestamp,
+    message_code,
+    message_severity
+  FROM events
+  WHERE mower_id = ?
+    AND event_type = 'message-event-v2'
+    AND event_timestamp IS NOT NULL
+  ORDER BY event_timestamp DESC
+  LIMIT 1
+`);
+
+const latestBatteryStmt = db.prepare(`
+  SELECT
+    event_timestamp,
+    payload
+  FROM events
+  WHERE mower_id = ?
+    AND event_type = 'battery-event-v2'
+    AND event_timestamp IS NOT NULL
+  ORDER BY event_timestamp DESC
+  LIMIT 1
+`);
 
 function storeEvent({
   mowerId,
@@ -176,7 +224,7 @@ function storeEvent({
       messageSeverity,
       payload
     );
-    return result.lastInsertRowid;
+    return Number(result.lastInsertRowid);
   } catch (err) {
     if (err.code !== 'SQLITE_CONSTRAINT_UNIQUE') {
       throw err;
@@ -217,11 +265,124 @@ function storePosition({ mowerId, sessionId, state, lat, lon, timestamp, eventId
   }
 }
 
-function getPositions() {
-  return selectStmt.all();
+function getPositions({ mowerId, sessionId } = {}) {
+  let query = `
+    SELECT mower_id, session_id, lat, lon, timestamp, activity
+    FROM positions
+  `;
+  const clauses = [];
+  const params = [];
+
+  if (mowerId) {
+    clauses.push('mower_id = ?');
+    params.push(mowerId);
+  }
+  if (sessionId != null && sessionId !== '') {
+    clauses.push('session_id = ?');
+    params.push(sessionId);
+  }
+
+  if (clauses.length > 0) {
+    query += ` WHERE ${clauses.join(' AND ')}`;
+  }
+
+  if (clauses.length === 0) {
+    query += ' ORDER BY mower_id, timestamp';
+  } else if (clauses.length === 1 && clauses[0].startsWith('mower_id')) {
+    query += ' ORDER BY timestamp';
+  } else {
+    query += ' ORDER BY mower_id, timestamp';
+  }
+
+  const stmt = db.prepare(query);
+  return stmt.all(...params);
 }
 
-export { storePosition, getPositions, storeEvent };
+function toDurationMinutes(start, end) {
+  const startMs = Date.parse(start ?? '');
+  const endMs = Date.parse(end ?? '');
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs)) return null;
+  if (endMs < startMs) return 0;
+  return Math.round((endMs - startMs) / 60000);
+}
+
+function getSessionSummaries({ mowerId, limit = 5, messageLimit = 3 } = {}) {
+  if (!mowerId) return [];
+  const limitValue = Number(limit);
+  const lim = Number.isFinite(limitValue) ? Math.max(1, Math.floor(limitValue)) : 5;
+  const msgLimitValue = Number(messageLimit);
+  const msgLim = Number.isFinite(msgLimitValue) ? Math.max(0, Math.floor(msgLimitValue)) : 3;
+  const rows = sessionSummaryStmt.all(mowerId, lim);
+
+  return rows.map((row) => {
+    const messages = msgLim > 0
+      ? sessionMessagesStmt.all(mowerId, row.start, row.end, msgLim).filter((msg) => msg.message_code != null)
+      : [];
+
+    return {
+      mowerId: row.mower_id,
+      sessionId: row.session_id,
+      start: row.start,
+      end: row.end,
+      durationMinutes: toDurationMinutes(row.start, row.end),
+      points: row.points,
+      messages: messages.map((msg) => ({
+        timestamp: msg.event_timestamp,
+        code: msg.message_code,
+        severity: msg.message_severity
+      }))
+    };
+  });
+}
+
+function getLatestMessage(mowerId) {
+  if (!mowerId) return null;
+  const row = latestMessageStmt.get(mowerId);
+  if (!row) return null;
+  return {
+    timestamp: row.event_timestamp,
+    code: row.message_code,
+    severity: row.message_severity
+  };
+}
+
+function getLatestBatteryReading(mowerId) {
+  if (!mowerId) return null;
+  const row = latestBatteryStmt.get(mowerId);
+  if (!row) return null;
+
+  let batteryPercent = null;
+  if (row.payload) {
+    try {
+      const parsed = JSON.parse(row.payload);
+      const raw = parsed?.attributes?.battery?.batteryPercent;
+      if (typeof raw === 'number' && Number.isFinite(raw)) {
+        batteryPercent = Math.round(raw);
+      } else if (typeof raw === 'string') {
+        const numeric = Number(raw);
+        if (Number.isFinite(numeric)) {
+          batteryPercent = Math.round(numeric);
+        }
+      }
+    } catch (err) {
+      // ignore malformed JSON
+    }
+  }
+
+  return {
+    timestamp: row.event_timestamp,
+    batteryPercent
+  };
+}
+
+export {
+  storePosition,
+  getPositions,
+  storeEvent,
+  getSessionSummaries,
+  getLatestMessage,
+  getLatestBatteryReading
+};
 export function closeDb() {
   try { db.close(); } catch {}
 }

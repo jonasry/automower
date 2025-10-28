@@ -79,8 +79,8 @@ function interpolateSession(points, output, session_id) {
   output.push([b.lat, b.lon, weight, session_id, true]);
 }
 
-function getInterpolatedPositions() {
-  const rows = getPositions();
+function getInterpolatedPositions({ mowerId, sessionId } = {}) {
+  const rows = getPositions({ mowerId, sessionId });
 
   const interpolated = [];
   const grouped = new Map();
