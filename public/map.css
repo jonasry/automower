@@ -80,6 +80,21 @@ select {
   outline: none;
 }
 
+.mower-picker,
+.session-select,
+.status-badge,
+.freshness,
+.battery-text {
+  max-width: 100%;
+}
+
+.session-panel,
+.status-strip,
+.metric,
+.detail-row {
+  min-width: 0;
+}
+
 .mower-picker {
   max-width: 190px;
   font-weight: 750;
@@ -278,6 +293,11 @@ h1 {
 .detail-row strong {
   color: var(--text);
   text-align: right;
+}
+
+.detail-row strong,
+.detail-row span {
+  overflow-wrap: anywhere;
 }
 
 .is-loading .metric-value,
