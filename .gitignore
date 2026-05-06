@@ -1,5 +1,6 @@
 /node_modules/
 .superpowers/
+.playwright-mcp/
 *.sqlite
 *.sqlite-shm
 *.sqlite-wal
