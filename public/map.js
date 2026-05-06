@@ -14,6 +14,7 @@ let recentLayer = null;
 let boundsFitted = false;
 let activeRequests = 0;
 let latestRequestId = 0;
+let hasRenderedData = false;
 
 document.getElementById('activityBadge').textContent = 'Mowing now';
 document.getElementById('freshnessText').textContent = 'Last updated just now';
@@ -32,6 +33,10 @@ function setPanelLoading(isLoading) {
 
 function setStatusValue(value) {
   document.getElementById('statusValue').textContent = value;
+}
+
+function setActivityBadge(value) {
+  document.getElementById('activityBadge').textContent = value;
 }
 
 function updateBattery(pct) {
@@ -123,9 +128,10 @@ function renderRecentPath(recent) {
 
 async function loadData() {
   const requestId = ++latestRequestId;
+  const shouldShowSkeleton = !hasRenderedData;
   activeRequests += 1;
   setMapMessage('');
-  setPanelLoading(true);
+  setPanelLoading(shouldShowSkeleton);
 
   try {
     const res = await fetch('/api/positions');
@@ -138,13 +144,16 @@ async function loadData() {
     renderHeatmap(heat);
     renderRecentPath(recent);
     renderSessionStats({ heat, recent });
+    hasRenderedData = heat.length > 0;
 
     if (!heat.length) {
       setMapMessage('Waiting for mower position data');
       setStatusValue('Waiting for data');
+      setActivityBadge('Waiting for data');
     } else {
       setMapMessage('');
       setStatusValue('Coverage data loaded');
+      setActivityBadge('Mowing now');
     }
 
     document.getElementById('freshnessText').textContent = 'Last updated just now';
@@ -152,14 +161,17 @@ async function loadData() {
     console.error(err);
     if (requestId !== latestRequestId) return;
 
-    clearLayers();
-    renderSessionStats({ heat: [], recent: [] });
+    if (!hasRenderedData) {
+      clearLayers();
+      renderSessionStats({ heat: [], recent: [] });
+    }
     setMapMessage('Could not load mower positions. Retrying soon.');
     setStatusValue('Update delayed');
+    setActivityBadge('Update delayed');
     document.getElementById('freshnessText').textContent = 'Update delayed';
   } finally {
     activeRequests = Math.max(0, activeRequests - 1);
-    setPanelLoading(activeRequests > 0);
+    setPanelLoading(shouldShowSkeleton && activeRequests > 0);
   }
 }
 
