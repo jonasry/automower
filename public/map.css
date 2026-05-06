@@ -96,7 +96,8 @@ select {
 }
 
 .mower-picker {
-  max-width: 190px;
+  width: min(190px, 100%);
+  max-width: 100%;
   font-weight: 750;
 }
 
