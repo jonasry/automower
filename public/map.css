@@ -34,6 +34,7 @@ body {
   color: var(--text);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   letter-spacing: 0;
+  overflow-x: hidden;
 }
 
 button,
@@ -49,6 +50,7 @@ select {
 
 .status-strip {
   z-index: 600;
+  width: 100%;
   min-height: 64px;
   display: flex;
   align-items: center;
@@ -175,6 +177,7 @@ select {
 
 .map-region {
   position: relative;
+  min-width: 0;
   min-height: 520px;
   overflow: hidden;
   border: 1px solid rgba(215, 224, 210, 0.8);
@@ -206,6 +209,7 @@ select {
 
 .session-panel {
   align-self: stretch;
+  width: 100%;
   overflow: auto;
   border: 1px solid rgba(215, 224, 210, 0.82);
   border-radius: var(--radius-lg);
@@ -234,12 +238,14 @@ h1 {
   color: var(--text);
   font-size: 28px;
   line-height: 1.12;
+  overflow-wrap: anywhere;
 }
 
 .session-summary {
   margin: 10px 0 0;
   color: var(--muted);
   line-height: 1.45;
+  overflow-wrap: anywhere;
 }
 
 .metric-grid {
@@ -392,6 +398,26 @@ h1 {
   .mower-identity,
   .status-meta {
     flex-wrap: wrap;
+  }
+
+  .mower-identity {
+    width: 100%;
+  }
+
+  .mower-picker {
+    flex: 0 1 190px;
+    min-width: 0;
+  }
+
+  .status-meta {
+    align-items: flex-start;
+    justify-content: flex-start;
+  }
+
+  .freshness {
+    flex: 1 1 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
   }
 
   .metric-grid {
