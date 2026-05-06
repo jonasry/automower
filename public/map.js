@@ -13,6 +13,11 @@ let heatLayer = null;
 let recentLayer = null;
 let boundsFitted = false;
 
+document.getElementById('activityBadge').textContent = 'Mowing now';
+document.getElementById('freshnessText').textContent = 'Last updated just now';
+document.getElementById('sessionTitle').textContent = 'Latest garden run';
+document.getElementById('sessionSummary').textContent = 'Showing recent path and coverage heat from recorded mower positions.';
+
 function setMapMessage(message) {
   const el = document.getElementById('mapMessage');
   el.hidden = !message;
