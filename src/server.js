@@ -2,6 +2,7 @@ import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { getInterpolatedPositions } from './interpolate.js';
+import { summarizeLatestSession } from './sessionSummary.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -27,8 +28,10 @@ app.get('/api/positions', (req, res) => {
     }
   }
 
+  const session = summarizeLatestSession(data);
+
   res.set('Cache-Control', 'public, max-age=15');
-  res.json({ heat, recent });
+  res.json({ heat, recent, session });
 });
 
 export function startHttpServer(port = process.env.PORT || 3000) {

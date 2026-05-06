@@ -48,11 +48,35 @@ function updateBattery(pct) {
   text.textContent = `${clamped}%`;
 }
 
-function renderSessionStats({ heat, recent }) {
+function formatDuration(ms) {
+  if (!Number.isFinite(ms)) return '-';
+
+  const totalMinutes = Math.max(0, Math.round(ms / 60000));
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+
+  if (hours > 0 && minutes > 0) return `${hours}h ${minutes}m`;
+  if (hours > 0) return `${hours}h`;
+  return `${minutes}m`;
+}
+
+function formatTimestamp(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '-';
+
+  return new Intl.DateTimeFormat(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  }).format(date);
+}
+
+function renderSessionStats({ heat, recent, session }) {
   document.getElementById('pointsValue').textContent = heat.length ? heat.length.toLocaleString() : '-';
-  document.getElementById('durationValue').textContent = recent.length > 1 ? 'Active' : '-';
-  document.getElementById('startValue').textContent = recent.length ? 'Recorded' : '-';
-  document.getElementById('endValue').textContent = recent.length ? 'Latest' : '-';
+  document.getElementById('durationValue').textContent = formatDuration(session?.durationMs);
+  document.getElementById('startValue').textContent = session?.start ? formatTimestamp(session.start) : '-';
+  document.getElementById('endValue').textContent = session?.end ? formatTimestamp(session.end) : '-';
   document.getElementById('statusValue').textContent = heat.length ? 'Coverage data loaded' : 'Waiting for data';
 }
 
@@ -137,13 +161,13 @@ async function loadData() {
     const res = await fetch('/api/positions');
     if (!res.ok) throw new Error(`Positions request failed: ${res.status}`);
 
-    const { heat = [], recent = [] } = await res.json();
+    const { heat = [], recent = [], session = null } = await res.json();
     if (requestId !== latestRequestId) return;
 
     clearLayers();
     renderHeatmap(heat);
     renderRecentPath(recent);
-    renderSessionStats({ heat, recent });
+    renderSessionStats({ heat, recent, session });
     hasRenderedData = heat.length > 0;
 
     if (!heat.length) {
@@ -163,7 +187,7 @@ async function loadData() {
 
     if (!hasRenderedData) {
       clearLayers();
-      renderSessionStats({ heat: [], recent: [] });
+      renderSessionStats({ heat: [], recent: [], session: null });
     }
     setMapMessage('Could not load mower positions. Retrying soon.');
     setStatusValue('Update delayed');

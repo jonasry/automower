@@ -60,7 +60,7 @@ function interpolateSession(points, output, session_id) {
     if (!isFinite(dist)) continue;
 
     if (dist < 1) {
-        output.push([a.lat, a.lon, weight, session_id, true]);
+        output.push([a.lat, a.lon, weight, session_id, true, a.timestamp]);
 
     } else {
         const segment = interpolatePointsTimed(
@@ -76,7 +76,7 @@ function interpolateSession(points, output, session_id) {
     }
   }
   const b = points[points.length - 1];
-  output.push([b.lat, b.lon, weight, session_id, true]);
+  output.push([b.lat, b.lon, weight, session_id, true, b.timestamp]);
 }
 
 function getInterpolatedPositions() {
