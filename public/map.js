@@ -12,6 +12,8 @@ const map = L.map('map', {
 let heatLayer = null;
 let recentLayer = null;
 let boundsFitted = false;
+let activeRequests = 0;
+let latestRequestId = 0;
 
 document.getElementById('activityBadge').textContent = 'Mowing now';
 document.getElementById('freshnessText').textContent = 'Last updated just now';
@@ -120,6 +122,8 @@ function renderRecentPath(recent) {
 }
 
 async function loadData() {
+  const requestId = ++latestRequestId;
+  activeRequests += 1;
   setMapMessage('');
   setPanelLoading(true);
 
@@ -128,6 +132,8 @@ async function loadData() {
     if (!res.ok) throw new Error(`Positions request failed: ${res.status}`);
 
     const { heat = [], recent = [] } = await res.json();
+    if (requestId !== latestRequestId) return;
+
     clearLayers();
     renderHeatmap(heat);
     renderRecentPath(recent);
@@ -137,19 +143,23 @@ async function loadData() {
       setMapMessage('Waiting for mower position data');
       setStatusValue('Waiting for data');
     } else {
+      setMapMessage('');
       setStatusValue('Coverage data loaded');
     }
 
     document.getElementById('freshnessText').textContent = 'Last updated just now';
   } catch (err) {
     console.error(err);
+    if (requestId !== latestRequestId) return;
+
     clearLayers();
     renderSessionStats({ heat: [], recent: [] });
     setMapMessage('Could not load mower positions. Retrying soon.');
     setStatusValue('Update delayed');
     document.getElementById('freshnessText').textContent = 'Update delayed';
   } finally {
-    setPanelLoading(false);
+    activeRequests = Math.max(0, activeRequests - 1);
+    setPanelLoading(activeRequests > 0);
   }
 }
 
