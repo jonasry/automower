@@ -24,6 +24,14 @@ function setMapMessage(message) {
   el.textContent = message || '';
 }
 
+function setPanelLoading(isLoading) {
+  document.body.classList.toggle('is-loading', isLoading);
+}
+
+function setStatusValue(value) {
+  document.getElementById('statusValue').textContent = value;
+}
+
 function updateBattery(pct) {
   const clamped = Math.max(0, Math.min(100, pct | 0));
   const level = document.getElementById('batteryLevel');
@@ -113,6 +121,7 @@ function renderRecentPath(recent) {
 
 async function loadData() {
   setMapMessage('');
+  setPanelLoading(true);
 
   try {
     const res = await fetch('/api/positions');
@@ -126,6 +135,9 @@ async function loadData() {
 
     if (!heat.length) {
       setMapMessage('Waiting for mower position data');
+      setStatusValue('Waiting for data');
+    } else {
+      setStatusValue('Coverage data loaded');
     }
 
     document.getElementById('freshnessText').textContent = 'Last updated just now';
@@ -134,7 +146,10 @@ async function loadData() {
     clearLayers();
     renderSessionStats({ heat: [], recent: [] });
     setMapMessage('Could not load mower positions. Retrying soon.');
+    setStatusValue('Update delayed');
     document.getElementById('freshnessText').textContent = 'Update delayed';
+  } finally {
+    setPanelLoading(false);
   }
 }
 

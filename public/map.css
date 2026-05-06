@@ -280,6 +280,24 @@ h1 {
   text-align: right;
 }
 
+.is-loading .metric-value,
+.is-loading .detail-row strong {
+  color: transparent;
+  border-radius: 8px;
+  background: linear-gradient(90deg, #e8efdf, #f8f6eb, #e8efdf);
+  background-size: 220% 100%;
+  animation: shimmer 1.2s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -100% 0;
+  }
+}
+
 .endpoint-marker {
   display: grid;
   place-items: center;
