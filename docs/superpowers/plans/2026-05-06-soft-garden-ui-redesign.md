@@ -99,7 +99,7 @@ Use this complete structure:
           </div>
           <div class="metric">
             <span class="metric-value" id="coverageValue">7d</span>
-            <span class="metric-label">Heat window</span>
+            <span class="metric-label">Window</span>
           </div>
         </div>
 
