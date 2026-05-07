@@ -2,7 +2,7 @@ import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { getInterpolatedPositions } from './interpolate.js';
-import { summarizeLatestSession } from './sessionSummary.js';
+import { buildPositionsPayload } from './positionsPayload.js';
 import { mowerStates, updateMowerState } from './state.js';
 import { getLatestBatteryReading, getLatestMessage, getSessionSummaries } from './db.js';
 import { messageDescriptions } from './amcmessages.js';
@@ -16,39 +16,30 @@ app.use(express.static(path.join(__dirname, '../public')));
 
 app.get('/api/positions', (req, res) => {
   const { mowerId, sessionId } = req.query;
-  const filters = {};
+  const heatFilters = {};
+  const trailFilters = {};
+  let selectedSessionId = null;
 
   if (typeof mowerId === 'string' && mowerId.trim().length > 0) {
-    filters.mowerId = mowerId.trim();
+    const selectedMowerId = mowerId.trim();
+    heatFilters.mowerId = selectedMowerId;
+    trailFilters.mowerId = selectedMowerId;
   }
   if (typeof sessionId === 'string' && sessionId.trim().length > 0) {
     const parsed = Number(sessionId);
     if (Number.isFinite(parsed)) {
-      filters.sessionId = parsed;
+      trailFilters.sessionId = parsed;
+      selectedSessionId = parsed;
     }
   }
 
-  const data = getInterpolatedPositions(filters);
-
-  const heat = data.map(([lat, lon, weight]) => [lat, lon, weight]);
-
-  const recent = [];
-  if (data && data.length > 0) {
-    const lastSessionId = filters.sessionId ?? data[data.length - 1][3];
-
-    for (let i = data.length - 1; i >= 0; i--) {
-      const entry = data[i];
-      if (entry[3] !== lastSessionId) break;
-      if (entry[4] === true) {
-        recent.push([entry[0], entry[1]]);
-      }
-    }
-  }
-
-  const session = summarizeLatestSession(data);
+  const heatData = getInterpolatedPositions(heatFilters);
+  const trailData = selectedSessionId == null
+    ? heatData
+    : getInterpolatedPositions(trailFilters);
 
   res.set('Cache-Control', 'public, max-age=15');
-  res.json({ heat, recent, session });
+  res.json(buildPositionsPayload({ heatData, trailData, selectedSessionId }));
 });
 
 app.get('/api/status', (req, res) => {
