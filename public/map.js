@@ -1,9 +1,8 @@
-const gardenGradient = {
-  0.2: 'rgba(131, 164, 113, 0.55)',
-  0.45: '#7ea36a',
-  0.7: '#d8b65f',
-  1.0: '#df7f64'
-};
+import {
+  applyContributionStrength,
+  buildHeatmapOptions,
+  loadHeatmapSettings
+} from './heatmapSettings.js';
 
 const STATUS_POLL_MS = 30000;
 
@@ -21,6 +20,9 @@ let selectedMowerId = null;
 let selectedSessionId = 'latest';
 let boundsKey = null;
 let suppressSessionChange = false;
+let heatmapSettings = loadHeatmapSettings();
+let latestHeat = [];
+let latestFitKey = null;
 
 const mowerPicker = document.getElementById('mowerPicker');
 const sessionSelect = document.getElementById('sessionSelect');
@@ -281,18 +283,17 @@ function clearLayers() {
   }
 }
 
-function renderHeatmap(heat, fitKey) {
+function renderHeatmap(heat, fitKey, settings = heatmapSettings) {
+  latestHeat = heat;
+  latestFitKey = fitKey;
+
   if (!heat.length) {
     boundsKey = null;
     return;
   }
 
-  heatLayer = L.heatLayer(heat, {
-    radius: 11,
-    blur: 8,
-    maxZoom: 20,
-    gradient: gardenGradient
-  }).addTo(map);
+  const adjustedHeat = applyContributionStrength(heat, settings);
+  heatLayer = L.heatLayer(adjustedHeat, buildHeatmapOptions(settings)).addTo(map);
 
   if (boundsKey !== fitKey) {
     const latLngs = heat
@@ -303,6 +304,14 @@ function renderHeatmap(heat, fitKey) {
       boundsKey = fitKey;
     }
   }
+}
+
+function redrawHeatmapPreview(settings) {
+  if (heatLayer) {
+    map.removeLayer(heatLayer);
+    heatLayer = null;
+  }
+  renderHeatmap(latestHeat, latestFitKey, settings);
 }
 
 function makeEndpointMarker(className, label) {
