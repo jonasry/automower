@@ -14,6 +14,15 @@ export const DEFAULT_HEATMAP_SETTINGS = {
 
 const colorPattern = /^#[0-9a-f]{6}$/i;
 
+function createDefaultHeatmapSettings() {
+  return {
+    ...DEFAULT_HEATMAP_SETTINGS,
+    colors: {
+      ...DEFAULT_HEATMAP_SETTINGS.colors
+    }
+  };
+}
+
 function isObject(value) {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
@@ -32,7 +41,7 @@ function normalizeRatio(value, fallback) {
 
 export function normalizeHeatmapSettings(settings) {
   if (!isObject(settings) || settings.version !== DEFAULT_HEATMAP_SETTINGS.version) {
-    return DEFAULT_HEATMAP_SETTINGS;
+    return createDefaultHeatmapSettings();
   }
 
   const colors = isObject(settings.colors) ? settings.colors : {};
@@ -55,9 +64,9 @@ export function loadHeatmapSettings(storage = globalThis.localStorage) {
     const rawSettings = storage?.getItem(HEATMAP_SETTINGS_STORAGE_KEY);
     return rawSettings
       ? normalizeHeatmapSettings(JSON.parse(rawSettings))
-      : DEFAULT_HEATMAP_SETTINGS;
+      : createDefaultHeatmapSettings();
   } catch {
-    return DEFAULT_HEATMAP_SETTINGS;
+    return createDefaultHeatmapSettings();
   }
 }
 

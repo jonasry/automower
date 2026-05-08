@@ -32,6 +32,18 @@ test('loads defaults when storage contains invalid JSON', () => {
   assert.deepEqual(loadHeatmapSettings(storage), DEFAULT_HEATMAP_SETTINGS);
 });
 
+test('defaulted loads can be mutated without changing shared defaults or future loads', () => {
+  const storage = makeStorage();
+  const loaded = loadHeatmapSettings(storage);
+
+  loaded.colors.low = '#000000';
+  loaded.softness = 0;
+
+  assert.equal(DEFAULT_HEATMAP_SETTINGS.colors.low, '#83a471');
+  assert.equal(DEFAULT_HEATMAP_SETTINGS.softness, 0.5);
+  assert.deepEqual(loadHeatmapSettings(storage), DEFAULT_HEATMAP_SETTINGS);
+});
+
 test('normalizes valid settings and falls back invalid fields independently', () => {
   assert.deepEqual(normalizeHeatmapSettings({
     version: 1,
