@@ -46,6 +46,8 @@ The map remains visible and interactive while the side panel changes.
 Configure mode includes:
 
 - Four labeled color controls: `Low`, `Medium`, `High`, and `Peak`.
+- A horizontal gradient preview showing how the selected colors blend. This is a
+  preview, not the picker itself.
 - A `Sharper` to `Softer` control for heat radius. Internally, sharper means a
   smaller heat radius and softer means a larger heat radius.
 - A `Subtle` to `Strong` control for contribution strength. Internally, this
@@ -62,16 +64,26 @@ by moving controls and watching the heatmap redraw live.
 
 ## Color Stops
 
-The four color controls represent heatmap intensity stops:
+The four color controls are swatches or color inputs. They represent heatmap
+intensity stops:
 
 - `Low`: sparse or light mower coverage.
 - `Medium`: more overlapping contributions.
 - `High`: repeated coverage.
 - `Peak`: the strongest hotspots.
 
+The source defaults can stay soft and garden-compatible, but the controls should
+allow the user to choose more saturated colors if that gives better feedback for
+their lawn and map background.
+
 The implementation can map these labels to the fixed Leaflet gradient stop
 positions already implied by the current design. Those stop positions remain an
 implementation detail and are not displayed to the user.
+
+Radius and contribution strength are global heatmap controls. They are not set
+separately per color stop. Color controls decide how intensity is colored;
+`Sharper` to `Softer` decides how wide each contribution feels; `Subtle` to
+`Strong` decides how much each contribution affects the heatmap.
 
 ## Architecture
 
