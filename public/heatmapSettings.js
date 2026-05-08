@@ -107,8 +107,8 @@ export function buildHeatmapOptions(settings) {
   const normalizedSettings = normalizeHeatmapSettings(settings);
 
   return {
-    radius: Math.round(7 + normalizedSettings.softness * 11),
-    blur: Math.round(5 + normalizedSettings.softness * 6),
+    radius: Math.round(6 + normalizedSettings.softness * 34),
+    blur: Math.round(4 + normalizedSettings.softness * 22),
     maxZoom: 20,
     gradient: buildGradient(normalizedSettings)
   };
@@ -116,7 +116,7 @@ export function buildHeatmapOptions(settings) {
 
 export function applyContributionStrength(heat, settings) {
   const normalizedSettings = normalizeHeatmapSettings(settings);
-  const multiplier = 0.5 + normalizedSettings.strength;
+  const multiplier = 0.15 + normalizedSettings.strength * 3.85;
 
   return heat.map(([lat, lon, weight]) => [lat, lon, weight * multiplier]);
 }

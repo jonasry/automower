@@ -170,8 +170,8 @@ test('builds gradient and heat options from normalized settings', () => {
   });
 
   assert.deepEqual(buildHeatmapOptions(settings), {
-    radius: 18,
-    blur: 11,
+    radius: 40,
+    blur: 26,
     maxZoom: 20,
     gradient: {
       0.2: '#111111',
@@ -193,8 +193,8 @@ test('applies contribution strength without mutating original heat payload', () 
   });
 
   assert.deepEqual(adjusted, [
-    [55.1, 13.1, 3],
-    [55.2, 13.2, 6]
+    [55.1, 13.1, 8],
+    [55.2, 13.2, 16]
   ]);
   assert.deepEqual(heat, [
     [55.1, 13.1, 2],
