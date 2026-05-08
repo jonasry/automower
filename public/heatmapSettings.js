@@ -27,6 +27,16 @@ function isObject(value) {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
+function resolveStorage(storage) {
+  if (storage !== undefined) return storage;
+
+  try {
+    return globalThis.localStorage;
+  } catch {
+    return null;
+  }
+}
+
 function normalizeColor(value, fallback) {
   return typeof value === 'string' && colorPattern.test(value)
     ? value.toLowerCase()
@@ -59,9 +69,9 @@ export function normalizeHeatmapSettings(settings) {
   };
 }
 
-export function loadHeatmapSettings(storage = globalThis.localStorage) {
+export function loadHeatmapSettings(storage) {
   try {
-    const rawSettings = storage?.getItem(HEATMAP_SETTINGS_STORAGE_KEY);
+    const rawSettings = resolveStorage(storage)?.getItem(HEATMAP_SETTINGS_STORAGE_KEY);
     return rawSettings
       ? normalizeHeatmapSettings(JSON.parse(rawSettings))
       : createDefaultHeatmapSettings();
@@ -70,9 +80,9 @@ export function loadHeatmapSettings(storage = globalThis.localStorage) {
   }
 }
 
-export function saveHeatmapSettings(storage = globalThis.localStorage, settings) {
+export function saveHeatmapSettings(storage, settings) {
   const normalizedSettings = normalizeHeatmapSettings(settings);
-  storage?.setItem(HEATMAP_SETTINGS_STORAGE_KEY, JSON.stringify(normalizedSettings));
+  resolveStorage(storage)?.setItem(HEATMAP_SETTINGS_STORAGE_KEY, JSON.stringify(normalizedSettings));
   return normalizedSettings;
 }
 

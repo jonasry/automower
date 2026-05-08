@@ -32,6 +32,26 @@ test('loads defaults when storage contains invalid JSON', () => {
   assert.deepEqual(loadHeatmapSettings(storage), DEFAULT_HEATMAP_SETTINGS);
 });
 
+test('loads defaults when browser storage access throws', () => {
+  const originalDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
+  Object.defineProperty(globalThis, 'localStorage', {
+    configurable: true,
+    get() {
+      throw new Error('localStorage unavailable');
+    }
+  });
+
+  try {
+    assert.deepEqual(loadHeatmapSettings(), DEFAULT_HEATMAP_SETTINGS);
+  } finally {
+    if (originalDescriptor) {
+      Object.defineProperty(globalThis, 'localStorage', originalDescriptor);
+    } else {
+      delete globalThis.localStorage;
+    }
+  }
+});
+
 test('defaulted loads can be mutated without changing shared defaults or future loads', () => {
   const storage = makeStorage();
   const loaded = loadHeatmapSettings(storage);
