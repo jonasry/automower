@@ -224,6 +224,112 @@ select {
   margin-top: 22px;
 }
 
+.panel-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.icon-button,
+.primary-button,
+.secondary-button {
+  min-height: 38px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0 14px;
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.icon-button:focus,
+.primary-button:focus,
+.secondary-button:focus,
+.semantic-range:focus,
+.color-control input:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(95, 143, 105, 0.18);
+}
+
+.primary-button {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--surface);
+}
+
+.secondary-button {
+  color: var(--accent-strong);
+}
+
+.gradient-preview {
+  height: 28px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: linear-gradient(90deg, #83a471, #7ea36a, #d8b65f, #df7f64);
+}
+
+.color-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.color-control {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+  border: 1px solid rgba(215, 224, 210, 0.8);
+  border-radius: var(--radius-md);
+  padding: 10px;
+  background: rgba(255, 255, 248, 0.72);
+  color: var(--text);
+  font-weight: 700;
+}
+
+.color-control input {
+  width: 42px;
+  height: 30px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.range-label {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+  color: var(--text);
+  font-weight: 750;
+}
+
+.semantic-range {
+  width: 100%;
+  accent-color: var(--accent);
+}
+
+.panel-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 22px;
+}
+
+.settings-error {
+  border: 1px solid rgba(185, 94, 78, 0.28);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+  background: rgba(185, 94, 78, 0.08);
+  color: var(--danger);
+}
+
 .section-kicker,
 .field-label {
   display: block;
@@ -426,6 +532,18 @@ h1 {
 
   h1 {
     font-size: 24px;
+  }
+
+  .color-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .panel-actions {
+    justify-content: stretch;
+  }
+
+  .panel-actions button {
+    flex: 1 1 auto;
   }
 }
 
