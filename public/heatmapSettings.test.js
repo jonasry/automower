@@ -106,6 +106,49 @@ test('saves and reloads valid settings', () => {
   assert.deepEqual(loadHeatmapSettings(storage), settings);
 });
 
+test('throws when saving without writable storage', () => {
+  assert.throws(
+    () => saveHeatmapSettings(null, DEFAULT_HEATMAP_SETTINGS),
+    /Heatmap settings storage is unavailable/
+  );
+});
+
+test('throws when browser storage is unavailable during save', () => {
+  const originalDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
+  Object.defineProperty(globalThis, 'localStorage', {
+    configurable: true,
+    get() {
+      throw new Error('localStorage unavailable');
+    }
+  });
+
+  try {
+    assert.throws(
+      () => saveHeatmapSettings(undefined, DEFAULT_HEATMAP_SETTINGS),
+      /Heatmap settings storage is unavailable/
+    );
+  } finally {
+    if (originalDescriptor) {
+      Object.defineProperty(globalThis, 'localStorage', originalDescriptor);
+    } else {
+      delete globalThis.localStorage;
+    }
+  }
+});
+
+test('throws when storage write fails', () => {
+  const storage = {
+    setItem() {
+      throw new Error('quota exceeded');
+    }
+  };
+
+  assert.throws(
+    () => saveHeatmapSettings(storage, DEFAULT_HEATMAP_SETTINGS),
+    /quota exceeded/
+  );
+});
+
 test('builds gradient and heat options from normalized settings', () => {
   const settings = normalizeHeatmapSettings({
     version: 1,

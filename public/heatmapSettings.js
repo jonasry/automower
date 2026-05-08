@@ -82,7 +82,13 @@ export function loadHeatmapSettings(storage) {
 
 export function saveHeatmapSettings(storage, settings) {
   const normalizedSettings = normalizeHeatmapSettings(settings);
-  resolveStorage(storage)?.setItem(HEATMAP_SETTINGS_STORAGE_KEY, JSON.stringify(normalizedSettings));
+  const resolvedStorage = resolveStorage(storage);
+
+  if (!resolvedStorage || typeof resolvedStorage.setItem !== 'function') {
+    throw new Error('Heatmap settings storage is unavailable');
+  }
+
+  resolvedStorage.setItem(HEATMAP_SETTINGS_STORAGE_KEY, JSON.stringify(normalizedSettings));
   return normalizedSettings;
 }
 
