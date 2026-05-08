@@ -193,8 +193,8 @@ test('applies contribution strength without mutating original heat payload', () 
   });
 
   assert.deepEqual(adjusted, [
-    [55.1, 13.1, 8],
-    [55.2, 13.2, 16]
+    [55.1, 13.1, 4],
+    [55.2, 13.2, 8]
   ]);
   assert.deepEqual(heat, [
     [55.1, 13.1, 2],

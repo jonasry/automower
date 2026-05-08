@@ -116,7 +116,7 @@ export function buildHeatmapOptions(settings) {
 
 export function applyContributionStrength(heat, settings) {
   const normalizedSettings = normalizeHeatmapSettings(settings);
-  const multiplier = 0.15 + normalizedSettings.strength * 3.85;
+  const multiplier = normalizedSettings.strength * 2;
 
   return heat.map(([lat, lon, weight]) => [lat, lon, weight * multiplier]);
 }
