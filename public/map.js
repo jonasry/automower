@@ -1,7 +1,11 @@
 import {
+  DEFAULT_HEATMAP_SETTINGS,
   applyContributionStrength,
+  buildGradient,
   buildHeatmapOptions,
-  loadHeatmapSettings
+  loadHeatmapSettings,
+  normalizeHeatmapSettings,
+  saveHeatmapSettings
 } from './heatmapSettings.js';
 
 const STATUS_POLL_MS = 30000;
@@ -21,6 +25,8 @@ let selectedSessionId = 'latest';
 let boundsKey = null;
 let suppressSessionChange = false;
 let heatmapSettings = loadHeatmapSettings();
+let draftHeatmapSettings = null;
+let isConfigMode = false;
 let latestHeat = [];
 let latestFitKey = null;
 
@@ -37,6 +43,20 @@ const endValue = document.getElementById('endValue');
 const statusValue = document.getElementById('statusValue');
 const batteryLevel = document.getElementById('batteryLevel');
 const batteryText = document.getElementById('batteryText');
+const statusPanelContent = document.getElementById('statusPanelContent');
+const configPanelContent = document.getElementById('configPanelContent');
+const settingsButton = document.getElementById('settingsButton');
+const settingsError = document.getElementById('settingsError');
+const gradientPreview = document.getElementById('gradientPreview');
+const heatColorLow = document.getElementById('heatColorLow');
+const heatColorMedium = document.getElementById('heatColorMedium');
+const heatColorHigh = document.getElementById('heatColorHigh');
+const heatColorPeak = document.getElementById('heatColorPeak');
+const softnessInput = document.getElementById('softnessInput');
+const strengthInput = document.getElementById('strengthInput');
+const resetSettingsButton = document.getElementById('resetSettingsButton');
+const cancelSettingsButton = document.getElementById('cancelSettingsButton');
+const saveSettingsButton = document.getElementById('saveSettingsButton');
 
 const sessionLabelFormatter = new Intl.DateTimeFormat(undefined, {
   month: 'short',
@@ -135,6 +155,88 @@ function setActivityBadge(value) {
 
 function resetMapFit() {
   boundsKey = null;
+}
+
+function setSettingsError(message) {
+  settingsError.hidden = !message;
+  settingsError.textContent = message || '';
+}
+
+function updateGradientPreview(settings) {
+  const gradient = buildGradient(settings);
+  gradientPreview.style.background = `linear-gradient(90deg, ${gradient[0.2]}, ${gradient[0.45]}, ${gradient[0.7]}, ${gradient[1.0]})`;
+}
+
+function renderSettingsControls(settings) {
+  heatColorLow.value = settings.colors.low;
+  heatColorMedium.value = settings.colors.medium;
+  heatColorHigh.value = settings.colors.high;
+  heatColorPeak.value = settings.colors.peak;
+  softnessInput.value = String(settings.softness);
+  strengthInput.value = String(settings.strength);
+  updateGradientPreview(settings);
+}
+
+function readDraftFromControls() {
+  return normalizeHeatmapSettings({
+    version: 1,
+    colors: {
+      low: heatColorLow.value,
+      medium: heatColorMedium.value,
+      high: heatColorHigh.value,
+      peak: heatColorPeak.value
+    },
+    softness: Number(softnessInput.value),
+    strength: Number(strengthInput.value)
+  });
+}
+
+function setPanelMode(mode) {
+  isConfigMode = mode === 'config';
+  statusPanelContent.hidden = isConfigMode;
+  configPanelContent.hidden = !isConfigMode;
+}
+
+function enterConfigureMode() {
+  draftHeatmapSettings = structuredClone(heatmapSettings);
+  setSettingsError('');
+  renderSettingsControls(draftHeatmapSettings);
+  setPanelMode('config');
+  heatColorLow.focus();
+}
+
+function previewDraftSettings() {
+  draftHeatmapSettings = readDraftFromControls();
+  renderSettingsControls(draftHeatmapSettings);
+  redrawHeatmapPreview(draftHeatmapSettings);
+}
+
+function cancelConfigureMode() {
+  draftHeatmapSettings = null;
+  setSettingsError('');
+  redrawHeatmapPreview(heatmapSettings);
+  setPanelMode('status');
+  settingsButton.focus();
+}
+
+function resetDraftSettings() {
+  draftHeatmapSettings = structuredClone(DEFAULT_HEATMAP_SETTINGS);
+  renderSettingsControls(draftHeatmapSettings);
+  redrawHeatmapPreview(draftHeatmapSettings);
+}
+
+function saveConfigureMode() {
+  try {
+    heatmapSettings = saveHeatmapSettings(undefined, readDraftFromControls());
+    draftHeatmapSettings = null;
+    setSettingsError('');
+    redrawHeatmapPreview(heatmapSettings);
+    setPanelMode('status');
+    settingsButton.focus();
+  } catch (err) {
+    console.error(err);
+    setSettingsError('Could not save settings in this browser.');
+  }
 }
 
 function updateBattery(pct) {
@@ -390,7 +492,7 @@ async function loadData(statusContext = null) {
     const context = statusContext ?? renderStatus();
     const fitKey = `${selectedMowerId || 'all'}::${sessionToLoad ?? 'latest'}`;
     clearLayers();
-    renderHeatmap(heat, fitKey);
+    renderHeatmap(heat, fitKey, isConfigMode && draftHeatmapSettings ? draftHeatmapSettings : heatmapSettings);
     renderRecentPath(recent);
     renderSessionStats({ heat, recent, session, summary: context?.summary, mower: context?.mower });
     hasRenderedData = heat.length > 0;
@@ -439,6 +541,22 @@ sessionSelect.addEventListener('change', () => {
   resetMapFit();
   const context = renderStatus();
   loadData(context);
+});
+
+settingsButton.addEventListener('click', enterConfigureMode);
+cancelSettingsButton.addEventListener('click', cancelConfigureMode);
+resetSettingsButton.addEventListener('click', resetDraftSettings);
+saveSettingsButton.addEventListener('click', saveConfigureMode);
+
+[
+  heatColorLow,
+  heatColorMedium,
+  heatColorHigh,
+  heatColorPeak,
+  softnessInput,
+  strengthInput
+].forEach((input) => {
+  input.addEventListener('input', previewDraftSettings);
 });
 
 refreshAll();
