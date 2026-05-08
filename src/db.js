@@ -2,6 +2,7 @@ import Database from 'better-sqlite3';
 import fs from 'node:fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { SESSION_SUMMARY_SQL } from './sessionSummaryQuery.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const dbDir = path.join(__dirname, '../db');
@@ -146,20 +147,7 @@ const updateEventReceivedAtStmt = db.prepare(`
   WHERE id = ?
 `);
 
-const sessionSummaryStmt = db.prepare(`
-  SELECT
-    mower_id,
-    session_id,
-    MIN(timestamp) AS start,
-    MAX(timestamp) AS end,
-    COUNT(*) AS points
-  FROM positions
-  WHERE mower_id = ?
-    AND session_id IS NOT NULL
-  GROUP BY mower_id, session_id
-  ORDER BY MAX(timestamp) DESC
-  LIMIT ?
-`);
+const sessionSummaryStmt = db.prepare(SESSION_SUMMARY_SQL);
 
 const sessionMessagesStmt = db.prepare(`
   SELECT
