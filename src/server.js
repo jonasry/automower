@@ -4,7 +4,7 @@ import { fileURLToPath } from 'url';
 import { getInterpolatedPositions } from './interpolate.js';
 import { buildPositionsPayload } from './positionsPayload.js';
 import { mowerStates, updateMowerState } from './state.js';
-import { getLatestBatteryReading, getLatestMessage, getSessionSummaries } from './db.js';
+import { getLatestBatteryReading, getLatestMessage, getLatestMessages, getSessionSummaries } from './db.js';
 import { messageDescriptions } from './amcmessages.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -77,6 +77,14 @@ app.get('/api/status', (req, res) => {
     const lastMessageDescription = lastMessage?.description ?? (
       lastMessage?.code != null ? messageDescriptions.get(lastMessage.code) ?? null : null
     );
+    const latestMessages = getLatestMessages(mowerId, 5).map((message) => ({
+      code: message.code ?? null,
+      severity: message.severity ?? null,
+      timestamp: message.timestamp ?? null,
+      description: message.code != null ? messageDescriptions.get(message.code) ?? null : null,
+      lat: message.lat ?? null,
+      lon: message.lon ?? null
+    }));
 
     const batteryFromDb = getLatestBatteryReading(mowerId);
     const stateBatteryTs = state.lastBatteryAt ?? null;
@@ -124,6 +132,7 @@ app.get('/api/status', (req, res) => {
             timestamp: lastMessage.timestamp ?? null
           }
         : null,
+      messages: latestMessages,
       lastPosition: state.lastPosition ?? null
     };
     mowers.push(mowerSummary);

@@ -16,6 +16,7 @@ const map = L.map('map', {
 
 let heatLayer = null;
 let recentLayer = null;
+let messageLayer = null;
 let activeRequests = 0;
 let latestRequestId = 0;
 let hasRenderedData = false;
@@ -40,7 +41,7 @@ const pointsValue = document.getElementById('pointsValue');
 const durationValue = document.getElementById('durationValue');
 const startValue = document.getElementById('startValue');
 const endValue = document.getElementById('endValue');
-const statusValue = document.getElementById('statusValue');
+const eventLog = document.getElementById('eventLog');
 const batteryLevel = document.getElementById('batteryLevel');
 const batteryText = document.getElementById('batteryText');
 const statusPanelContent = document.getElementById('statusPanelContent');
@@ -123,16 +124,10 @@ function formatSessionOptionLabel(session) {
   return `${startLabel} | ${durationLabel} | ${pointsLabel}`;
 }
 
-function describeMessage(msg) {
-  if (!msg) return null;
-  const parts = [];
-  const ts = formatTimestamp(msg.timestamp);
-  if (ts !== '-') parts.push(ts);
-  const severity = msg.severity ?? 'INFO';
-  const code = msg.code != null ? ` ${msg.code}` : '';
-  parts.push(`${severity}${code}`);
-  if (msg.description) parts.push(msg.description);
-  return parts.join(' - ');
+function getSeverityIcon(severity) {
+  if (severity === 'ERROR') return '!';
+  if (severity === 'WARNING') return '!';
+  return '';
 }
 
 function setMapMessage(message) {
@@ -143,10 +138,6 @@ function setMapMessage(message) {
 
 function setPanelLoading(isLoading) {
   document.body.classList.toggle('is-loading', isLoading);
-}
-
-function setStatusValue(value) {
-  statusValue.textContent = value;
 }
 
 function setActivityBadge(value) {
@@ -268,8 +259,6 @@ function getEffectiveSessionId() {
 
 function renderSessionStats({ heat, session, summary, mower }) {
   const displaySummary = summary ?? null;
-  const messageText = describeMessage(displaySummary?.messages?.[0] ?? mower?.lastMessage);
-  const statusText = messageText ?? (heat.length ? 'Coverage data loaded' : 'Waiting for data');
 
   pointsValue.textContent = Number.isFinite(displaySummary?.points)
     ? displaySummary.points.toLocaleString()
@@ -279,7 +268,44 @@ function renderSessionStats({ heat, session, summary, mower }) {
     : formatDurationMs(session?.durationMs);
   startValue.textContent = formatTimestamp(displaySummary?.start ?? session?.start);
   endValue.textContent = formatTimestamp(displaySummary?.end ?? session?.end);
-  statusValue.textContent = statusText;
+}
+
+function renderEventLog(messages = []) {
+  eventLog.innerHTML = '';
+
+  if (!Array.isArray(messages) || messages.length === 0) {
+    const empty = document.createElement('p');
+    empty.className = 'event-log__empty';
+    empty.textContent = 'No mower messages recorded';
+    eventLog.appendChild(empty);
+    return;
+  }
+
+  messages.slice(0, 5).forEach((message) => {
+    const row = document.createElement('div');
+    row.className = 'event-row';
+
+    const severity = document.createElement('span');
+    severity.className = 'event-row__severity';
+    const icon = getSeverityIcon(message.severity);
+    severity.textContent = icon ? `${icon} ${message.severity}` : (message.severity ?? 'INFO');
+
+    const time = document.createElement('time');
+    time.className = 'event-row__time';
+    time.dateTime = message.timestamp ?? '';
+    time.textContent = formatTimestamp(message.timestamp);
+
+    const code = document.createElement('span');
+    code.className = 'event-row__code';
+    code.textContent = message.code != null ? String(message.code) : '-';
+
+    const description = document.createElement('span');
+    description.className = 'event-row__message';
+    description.textContent = message.description ?? 'Unknown message';
+
+    row.append(severity, time, code, description);
+    eventLog.appendChild(row);
+  });
 }
 
 function updateMowerPickerOptions(mowers) {
@@ -345,6 +371,7 @@ function renderStatus() {
     freshnessText.textContent = 'Last updated -';
     sessionTitle.textContent = 'Latest garden run';
     sessionSummary.textContent = 'Showing recent path and coverage heat from recorded mower positions.';
+    renderEventLog([]);
     updateBattery(null);
     return null;
   }
@@ -369,6 +396,7 @@ function renderStatus() {
   sessionSummary.textContent = activeMower.name
     ? `Showing coverage and recent path for ${activeMower.name}.`
     : 'Showing recent path and coverage heat from recorded mower positions.';
+  renderEventLog(activeMower.messages);
 
   return { mower: activeMower, summary: activeSummary };
 }
@@ -382,6 +410,11 @@ function clearLayers() {
   if (recentLayer) {
     map.removeLayer(recentLayer);
     recentLayer = null;
+  }
+
+  if (messageLayer) {
+    map.removeLayer(messageLayer);
+    messageLayer = null;
   }
 }
 
@@ -425,6 +458,24 @@ function makeEndpointMarker(className, label) {
   });
 }
 
+function makeMessageMarker(severity, icon) {
+  const severityClass = severity === 'ERROR' ? 'message-marker--error' : 'message-marker--warning';
+  const label = severity === 'ERROR' ? 'Error message location' : 'Warning message location';
+  const markerShape = severity === 'ERROR'
+    ? `<span class="message-marker__circle" aria-hidden="true">${icon}</span>`
+    : `<svg class="message-marker__warning-icon" aria-hidden="true" viewBox="0 0 32 32" focusable="false">
+        <path d="M16 3.5c.85 0 1.65.46 2.1 1.25l12.15 21.05c.9 1.56-.22 3.5-2.1 3.5H3.85c-1.88 0-3-1.94-2.1-3.5L13.9 4.75A2.4 2.4 0 0 1 16 3.5Z"></path>
+        <line x1="16" y1="12" x2="16" y2="19.5"></line>
+        <circle cx="16" cy="24" r="1.55"></circle>
+      </svg>`;
+  return L.divIcon({
+    className: `message-marker ${severityClass}`,
+    html: `${markerShape}<span class="visually-hidden">${label}</span>`,
+    iconSize: [32, 32],
+    iconAnchor: [16, 16]
+  });
+}
+
 function renderRecentPath(recent) {
   recentLayer = L.layerGroup();
   const polylinePoints = [];
@@ -456,6 +507,23 @@ function renderRecentPath(recent) {
   }
 
   recentLayer.addTo(map);
+}
+
+function renderMessageMarkers(messages = []) {
+  messageLayer = L.layerGroup();
+
+  messages.forEach((message) => {
+    const lat = Number(message.lat);
+    const lon = Number(message.lon);
+    const icon = getSeverityIcon(message.severity);
+    if (!icon || !Number.isFinite(lat) || !Number.isFinite(lon)) return;
+
+    L.marker([lat, lon], {
+      icon: makeMessageMarker(message.severity, icon)
+    }).addTo(messageLayer);
+  });
+
+  messageLayer.addTo(map);
 }
 
 async function fetchStatus() {
@@ -494,12 +562,12 @@ async function loadData(statusContext = null) {
     clearLayers();
     renderHeatmap(heat, fitKey, isConfigMode && draftHeatmapSettings ? draftHeatmapSettings : heatmapSettings);
     renderRecentPath(recent);
+    renderMessageMarkers(context?.mower?.messages ?? []);
     renderSessionStats({ heat, recent, session, summary: context?.summary, mower: context?.mower });
     hasRenderedData = heat.length > 0;
 
     if (!heat.length) {
       setMapMessage('Waiting for mower position data');
-      setStatusValue('Waiting for data');
     } else {
       setMapMessage('');
     }
@@ -512,7 +580,6 @@ async function loadData(statusContext = null) {
       renderSessionStats({ heat: [], recent: [], session: null, summary: null, mower: null });
     }
     setMapMessage('Could not load mower positions. Retrying soon.');
-    setStatusValue('Update delayed');
     setActivityBadge('Update delayed');
     freshnessText.textContent = 'Update delayed';
   } finally {

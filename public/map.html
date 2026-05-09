@@ -74,7 +74,15 @@
           <div class="panel-section panel-section--quiet">
             <p class="detail-row"><span>Start</span><strong id="startValue">-</strong></p>
             <p class="detail-row"><span>End</span><strong id="endValue">-</strong></p>
-            <p class="detail-row"><span>Status</span><strong id="statusValue">Waiting for data</strong></p>
+            <div class="event-log" aria-label="Mower message events">
+              <div class="event-log__header">
+                <span>Events</span>
+                <strong>Latest 5</strong>
+              </div>
+              <div id="eventLog" class="event-log__rows">
+                <p class="event-log__empty">No mower messages recorded</p>
+              </div>
+            </div>
           </div>
         </div>
 

@@ -413,6 +413,82 @@ h1 {
   overflow-wrap: anywhere;
 }
 
+.event-log {
+  margin-top: 10px;
+}
+
+.event-log__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+  color: var(--muted);
+}
+
+.event-log__header span {
+  font-weight: 750;
+}
+
+.event-log__header strong {
+  color: var(--faint);
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.event-log__rows {
+  display: grid;
+  gap: 8px;
+}
+
+.event-row {
+  display: grid;
+  grid-template-columns: minmax(72px, 0.8fr) minmax(68px, 0.75fr) minmax(48px, 0.45fr);
+  gap: 7px 10px;
+  min-width: 0;
+  border: 1px solid rgba(215, 224, 210, 0.8);
+  border-radius: var(--radius-md);
+  padding: 9px 10px;
+  background: rgba(255, 255, 248, 0.72);
+}
+
+.event-row__severity,
+.event-row__time,
+.event-row__code {
+  min-width: 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.event-row__severity {
+  color: var(--text);
+}
+
+.event-row__code {
+  text-align: right;
+}
+
+.event-row__message {
+  grid-column: 1 / -1;
+  min-width: 0;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.event-log__empty {
+  margin: 0;
+  border: 1px dashed rgba(215, 224, 210, 0.9);
+  border-radius: var(--radius-md);
+  padding: 11px 12px;
+  color: var(--muted);
+  background: rgba(255, 255, 248, 0.5);
+}
+
 .is-loading .metric-value,
 .is-loading .detail-row strong {
   color: transparent;
@@ -451,6 +527,53 @@ h1 {
 
 .endpoint-marker--end span:first-child {
   background: var(--accent-strong);
+}
+
+.message-marker {
+  display: grid;
+  place-items: center;
+}
+
+.message-marker__circle {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 3px solid var(--surface);
+  border-radius: 999px;
+  color: var(--surface);
+  font-size: 18px;
+  font-weight: 900;
+  line-height: 1;
+  box-shadow: 0 7px 18px rgba(31, 51, 40, 0.3);
+}
+
+.message-marker--error .message-marker__circle {
+  background: var(--danger);
+}
+
+.message-marker__warning-icon {
+  width: 32px;
+  height: 32px;
+  overflow: visible;
+  filter: drop-shadow(0 7px 10px rgba(31, 51, 40, 0.28));
+}
+
+.message-marker__warning-icon path {
+  fill: #d69a21;
+  stroke: var(--surface);
+  stroke-linejoin: round;
+  stroke-width: 3;
+}
+
+.message-marker__warning-icon line {
+  stroke: var(--surface);
+  stroke-linecap: round;
+  stroke-width: 3;
+}
+
+.message-marker__warning-icon circle {
+  fill: var(--surface);
 }
 
 .leaflet-control-zoom a,

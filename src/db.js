@@ -177,6 +177,21 @@ const latestMessageStmt = db.prepare(`
   LIMIT 1
 `);
 
+const latestMessagesStmt = db.prepare(`
+  SELECT
+    event_timestamp,
+    message_code,
+    message_severity,
+    lat,
+    lon
+  FROM events
+  WHERE mower_id = ?
+    AND event_type = 'message-event-v2'
+    AND event_timestamp IS NOT NULL
+  ORDER BY event_timestamp DESC
+  LIMIT ?
+`);
+
 const latestBatteryStmt = db.prepare(`
   SELECT
     event_timestamp,
@@ -332,6 +347,20 @@ function getLatestMessage(mowerId) {
   };
 }
 
+function getLatestMessages(mowerId, limit = 5) {
+  if (!mowerId) return [];
+  const limitValue = Number(limit);
+  const lim = Number.isFinite(limitValue) ? Math.max(1, Math.floor(limitValue)) : 5;
+
+  return latestMessagesStmt.all(mowerId, lim).map((row) => ({
+    timestamp: row.event_timestamp,
+    code: row.message_code,
+    severity: row.message_severity,
+    lat: row.lat,
+    lon: row.lon
+  }));
+}
+
 function getLatestBatteryReading(mowerId) {
   if (!mowerId) return null;
   const row = latestBatteryStmt.get(mowerId);
@@ -367,6 +396,7 @@ export {
   storeEvent,
   getSessionSummaries,
   getLatestMessage,
+  getLatestMessages,
   getLatestBatteryReading
 };
 export function closeDb() {
