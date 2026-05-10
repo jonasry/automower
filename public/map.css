@@ -111,14 +111,18 @@ select {
 
 .status-badge {
   display: inline-flex;
+  flex: 0 0 auto;
   align-items: center;
+  width: max-content;
   min-height: 30px;
+  max-width: 100%;
   border-radius: 999px;
   padding: 0 11px;
   background: #e6f0df;
   color: var(--accent-strong);
   font-size: 13px;
   font-weight: 750;
+  white-space: nowrap;
 }
 
 .battery-shell {
