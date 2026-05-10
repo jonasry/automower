@@ -35,11 +35,13 @@ async function loadMowerState(token, apiKey, apiSecret) {
     for (const mower of initialData.data ?? []) {
       const mowerId = mower.id;
       const mowerName = mower.attributes?.system?.name || 'Unknown';
+      const timeZone = mower.attributes?.settings?.timeZone ?? null;
       const activity = mower.attributes?.mower?.activity ?? 'UNKNOWN';
       const batteryRaw = mower.attributes?.battery?.batteryPercent;
       const batteryPercent = batteryRaw == null ? null : Math.round(Number(batteryRaw));
       const state = updateMowerState(mowerId, {
         mowerName,
+        timeZone,
         activity,
         sessionId: nowTs,
         lastActivityAt: nowIso,

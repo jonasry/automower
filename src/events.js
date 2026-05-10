@@ -24,6 +24,61 @@ export function toIsoTimestamp(value) {
   return null;
 }
 
+function getTimeZoneOffsetMs(timeZone, instantMs) {
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23'
+  });
+  const parts = Object.fromEntries(
+    formatter.formatToParts(new Date(instantMs))
+      .filter((part) => part.type !== 'literal')
+      .map((part) => [part.type, Number(part.value)])
+  );
+
+  return Date.UTC(
+    parts.year,
+    parts.month - 1,
+    parts.day,
+    parts.hour,
+    parts.minute,
+    parts.second
+  ) - instantMs;
+}
+
+export function toIsoTimestampFromLocalTime(value, timeZone) {
+  if (!timeZone) return toIsoTimestamp(value);
+
+  const utcIso = toIsoTimestamp(value);
+  if (!utcIso) return null;
+
+  try {
+    const utcDate = new Date(utcIso);
+    let instantMs = Date.UTC(
+      utcDate.getUTCFullYear(),
+      utcDate.getUTCMonth(),
+      utcDate.getUTCDate(),
+      utcDate.getUTCHours(),
+      utcDate.getUTCMinutes(),
+      utcDate.getUTCSeconds(),
+      utcDate.getUTCMilliseconds()
+    );
+
+    for (let i = 0; i < 3; i += 1) {
+      instantMs = Date.parse(utcIso) - getTimeZoneOffsetMs(timeZone, instantMs);
+    }
+
+    return new Date(instantMs).toISOString();
+  } catch {
+    return utcIso;
+  }
+}
+
 function extractCoordinates(eventType, attributes) {
   if (!attributes) return { lat: null, lon: null };
 
@@ -50,20 +105,20 @@ function extractMessageDetails(attributes) {
   };
 }
 
-function deriveTimestamp(message) {
+function deriveTimestamp(message, { mowerTimeZone } = {}) {
   const attributes = message?.attributes ?? {};
 
   return (
     toIsoTimestamp(attributes?.metadata?.timestamp) ??
-    toIsoTimestamp(attributes?.message?.time) ??
-    toIsoTimestamp(attributes?.mower?.errorCodeTimestamp) ??
-    toIsoTimestamp(attributes?.planner?.nextStartTimestamp) ??
+    toIsoTimestampFromLocalTime(attributes?.message?.time, mowerTimeZone) ??
+    toIsoTimestampFromLocalTime(attributes?.mower?.errorCodeTimestamp, mowerTimeZone) ??
+    toIsoTimestampFromLocalTime(attributes?.planner?.nextStartTimestamp, mowerTimeZone) ??
     toIsoTimestamp(attributes?.position?.timestamp) ??
     null
   );
 }
 
-export function shapeEventForStorage(message) {
+export function shapeEventForStorage(message, options = {}) {
   if (!message || typeof message !== 'object') return null;
 
   const receivedAt = new Date().toISOString();
@@ -85,7 +140,7 @@ export function shapeEventForStorage(message) {
   const { id: mowerId, type, attributes } = message;
   if (!type || !mowerId) return null;
 
-  const eventTimestamp = deriveTimestamp(message) ?? receivedAt;
+  const eventTimestamp = deriveTimestamp(message, options) ?? receivedAt;
   const { lat, lon } = extractCoordinates(type, attributes);
   const { code: messageCode, severity: messageSeverity } = extractMessageDetails(attributes);
 

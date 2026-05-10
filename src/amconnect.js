@@ -23,7 +23,10 @@ export function handleIncomingEvent(data) {
       console.log("🔒 Connected")
     }
 
-    const shapedEvent = shapeEventForStorage(message);
+    const { type, attributes, id: mowerId } = message;
+    const currentState = mowerId ? getMowerState(mowerId) : null;
+    const mowerTimeZone = currentState?.timeZone ?? attributes?.settings?.timeZone ?? null;
+    const shapedEvent = shapeEventForStorage(message, { mowerTimeZone });
     let eventId = null;
     let eventTimestampIso = null;
     if (shapedEvent) {
@@ -35,12 +38,11 @@ export function handleIncomingEvent(data) {
       }
     }
 
-    const { type, attributes, id: mowerId } = message;
     if (!type || !attributes || !mowerId) return;
 
     const mowerIdShort = mowerId.substring(0, 8);
-    const currentState = getMowerState(mowerId);
     const mowerName = currentState?.mowerName || 'Unknown';
+    const timeZone = mowerTimeZone ?? currentState?.timeZone ?? null;
     const lastEventTimestamp = eventTimestampIso ?? shapedEvent?.receivedAt ?? new Date().toISOString();
 
     if (type === 'mower-event-v2') {
@@ -52,6 +54,7 @@ export function handleIncomingEvent(data) {
           console.log(`📍 Activity changed for ${mowerName} (${mowerIdShort}): ${activity} at ${activityTimestampIso}`);
           updateMowerState(mowerId, {
             mowerName,
+            timeZone,
             activity,
             sessionId: Number.isNaN(activityTimestampMs) ? Date.now() : activityTimestampMs,
             lastActivityAt: activityTimestampIso,
@@ -62,6 +65,7 @@ export function handleIncomingEvent(data) {
       } else {
         updateMowerState(mowerId, {
           mowerName,
+          timeZone,
           lastEventAt: lastEventTimestamp
         });
       }
@@ -87,6 +91,7 @@ export function handleIncomingEvent(data) {
 
         updateMowerState(mowerId, {
           mowerName,
+          timeZone,
           lastPosition: { lat, lon, timestamp, eventId },
           lastEventAt: lastEventTimestamp
         });
@@ -95,7 +100,7 @@ export function handleIncomingEvent(data) {
     } else if (type === 'message-event-v2') {
       const lat = attributes?.message?.latitude;
       const lon = attributes?.message?.longitude;
-      const timestampIso = toIsoTimestamp(attributes?.message?.time) ?? new Date().toISOString();
+      const timestampIso = eventTimestampIso ?? new Date().toISOString();
       const code = attributes?.message?.code ?? null;
       const severity = attributes?.message?.severity ?? null;
 
@@ -106,6 +111,7 @@ export function handleIncomingEvent(data) {
 
       updateMowerState(mowerId, {
         mowerName,
+        timeZone,
         lastEventAt: lastEventTimestamp ?? timestampIso,
         lastMessage: code != null || severity != null ? {
           code,
@@ -122,6 +128,7 @@ export function handleIncomingEvent(data) {
       const pct = pctRaw == null ? null : Math.round(Number(pctRaw));
       updateMowerState(mowerId, {
         mowerName,
+        timeZone,
         batteryPercent: Number.isFinite(pct) ? Math.max(0, Math.min(100, pct)) : null,
         lastBatteryAt: lastEventTimestamp,
         lastEventAt: lastEventTimestamp
@@ -129,6 +136,7 @@ export function handleIncomingEvent(data) {
     } else {
       updateMowerState(mowerId, {
         mowerName,
+        timeZone,
         lastEventAt: lastEventTimestamp
       });
     }
