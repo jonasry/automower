@@ -4,7 +4,7 @@ import { fileURLToPath } from 'url';
 import { getInterpolatedPositions } from './interpolate.js';
 import { buildPositionsPayload } from './positionsPayload.js';
 import { mowerStates, updateMowerState } from './state.js';
-import { getLatestBatteryReading, getLatestMessage, getLatestMessages, getSessionSummaries } from './db.js';
+import { getLatestBatteryReading, getLatestMessage, getLatestMessages, getSessionSummaries, getStoredMowerIds } from './db.js';
 import { messageDescriptions } from './amcmessages.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -49,6 +49,13 @@ app.get('/api/status', (req, res) => {
     return res.json(statusCache.data);
   }
 
+  const payload = buildStatusPayload();
+  statusCache = { data: payload, expires: now + 10000 };
+  res.set('Cache-Control', 'public, max-age=10');
+  res.json(payload);
+});
+
+function buildStatusPayload() {
   const mowers = [];
   const sessions = {};
 
@@ -71,7 +78,13 @@ app.get('/api/status', (req, res) => {
     return latestIso;
   };
 
-  for (const [mowerId, state] of mowerStates.entries()) {
+  const mowerIds = new Set([
+    ...mowerStates.keys(),
+    ...getStoredMowerIds()
+  ]);
+
+  for (const mowerId of mowerIds) {
+    const state = mowerStates.get(mowerId) ?? {};
     const latestMessageFromDb = state.lastMessage ? null : getLatestMessage(mowerId);
     const lastMessage = state.lastMessage ?? latestMessageFromDb;
     const lastMessageDescription = lastMessage?.description ?? (
@@ -113,7 +126,8 @@ app.get('/api/status', (req, res) => {
       state.lastEventAt,
       state.lastActivityAt,
       batteryTimestamp,
-      state.lastPosition?.timestamp
+      state.lastPosition?.timestamp,
+      lastMessage?.timestamp
     );
 
     const mowerSummary = {
@@ -152,14 +166,13 @@ app.get('/api/status', (req, res) => {
     }));
   }
 
-  const payload = { mowers, sessions };
-  statusCache = { data: payload, expires: now + 10000 };
-  res.set('Cache-Control', 'public, max-age=10');
-  res.json(payload);
-});
+  return { mowers, sessions };
+}
 
 export function startHttpServer(port = process.env.PORT || 3000) {
   app.listen(port, () => {
     console.log(`🌍 HTTP server listening at http://localhost:${port}/map.html`);
   });
 }
+
+export { app, buildStatusPayload };

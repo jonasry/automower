@@ -204,6 +204,17 @@ const latestBatteryStmt = db.prepare(`
   LIMIT 1
 `);
 
+const storedMowerIdsStmt = db.prepare(`
+  SELECT DISTINCT mower_id
+  FROM events
+  WHERE mower_id IS NOT NULL AND mower_id != ''
+  UNION
+  SELECT DISTINCT mower_id
+  FROM positions
+  WHERE mower_id IS NOT NULL AND mower_id != ''
+  ORDER BY mower_id
+`);
+
 function storeEvent({
   mowerId,
   eventType,
@@ -390,6 +401,10 @@ function getLatestBatteryReading(mowerId) {
   };
 }
 
+function getStoredMowerIds() {
+  return storedMowerIdsStmt.all().map((row) => row.mower_id);
+}
+
 export {
   storePosition,
   getPositions,
@@ -397,7 +412,8 @@ export {
   getSessionSummaries,
   getLatestMessage,
   getLatestMessages,
-  getLatestBatteryReading
+  getLatestBatteryReading,
+  getStoredMowerIds
 };
 export function closeDb() {
   try { db.close(); } catch {}
