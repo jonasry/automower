@@ -2,6 +2,7 @@ export const mowerStates = new Map();
 
 const defaultState = {
   mowerName: 'Unknown',
+  timeZone: null,
   activity: 'UNKNOWN',
   sessionId: null,
   lastActivityAt: null,
