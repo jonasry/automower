@@ -8,7 +8,7 @@ import {
   saveHeatmapSettings
 } from './heatmapSettings.js';
 
-const STATUS_POLL_MS = 30000;
+const REFRESH_FALLBACK_MS = 30000;
 
 const map = L.map('map', {
   zoomControl: true
@@ -30,6 +30,8 @@ let draftHeatmapSettings = null;
 let isConfigMode = false;
 let latestHeat = [];
 let latestFitKey = null;
+let refreshFallbackTimer = null;
+let refreshInFlight = null;
 
 const mowerPicker = document.getElementById('mowerPicker');
 const sessionSelect = document.getElementById('sessionSelect');
@@ -593,6 +595,44 @@ async function refreshAll() {
   await loadData(context);
 }
 
+function scheduleFallbackRefresh() {
+  if (refreshFallbackTimer) clearTimeout(refreshFallbackTimer);
+  refreshFallbackTimer = setTimeout(() => {
+    refreshFromNotification();
+  }, REFRESH_FALLBACK_MS);
+}
+
+async function refreshFromNotification() {
+  if (refreshInFlight) return refreshInFlight;
+
+  refreshInFlight = refreshAll()
+    .catch((err) => {
+      console.error(err);
+    })
+    .finally(() => {
+      refreshInFlight = null;
+      scheduleFallbackRefresh();
+    });
+
+  return refreshInFlight;
+}
+
+function startServerNotifications() {
+  if (!('EventSource' in window)) {
+    scheduleFallbackRefresh();
+    return;
+  }
+
+  const events = new EventSource('/api/events');
+  events.addEventListener('mower-data', () => {
+    refreshFromNotification();
+  });
+  events.onerror = () => {
+    scheduleFallbackRefresh();
+  };
+  scheduleFallbackRefresh();
+}
+
 mowerPicker.addEventListener('change', () => {
   if (!mowerPicker.value) return;
   selectedMowerId = mowerPicker.value;
@@ -626,5 +666,5 @@ saveSettingsButton.addEventListener('click', saveConfigureMode);
   input.addEventListener('input', previewDraftSettings);
 });
 
-refreshAll();
-setInterval(refreshAll, STATUS_POLL_MS);
+refreshFromNotification();
+startServerNotifications();

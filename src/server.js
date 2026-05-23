@@ -6,12 +6,22 @@ import { buildPositionsPayload } from './positionsPayload.js';
 import { mowerStates, updateMowerState } from './state.js';
 import { getLatestBatteryReading, getLatestMessage, getLatestMessages, getSessionSummaries, getStoredMowerIds } from './db.js';
 import { messageDescriptions } from './amcmessages.js';
+import { clientEventBus } from './clientEvents.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 let statusCache = { data: null, expires: 0 };
 
 app.disable('x-powered-by');
+
+clientEventBus.onPublish(() => {
+  statusCache = { data: null, expires: 0 };
+});
+
+app.get('/api/events', (req, res) => {
+  clientEventBus.subscribe(res);
+});
+
 app.use(express.static(path.join(__dirname, '../public')));
 
 app.get('/api/positions', (req, res) => {

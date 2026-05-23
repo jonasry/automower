@@ -4,11 +4,16 @@ import { getMowerState, updateMowerState } from './state.js';
 import { getToken } from './auth.js';
 import { messageDescriptions, severitySymbols } from './amcmessages.js';
 import { shapeEventForStorage, toIsoTimestamp } from './events.js';
+import { clientEventBus } from './clientEvents.js';
 
 let pingInterval = null;
 let reconnectTimer = null;
 let reconnectAttempts = 0;
 let wss = null;
+
+function publishClientChange({ type, mowerId, eventId, timestamp, changed }) {
+  clientEventBus.publish({ type, mowerId, eventId, timestamp, changed });
+}
 
 export function handleIncomingEvent(data) {
   if (!data.length) return;
@@ -61,12 +66,26 @@ export function handleIncomingEvent(data) {
             lastEventAt: lastEventTimestamp,
             isCharging: activity === 'CHARGING'
           });
+          publishClientChange({
+            type,
+            mowerId,
+            eventId,
+            timestamp: activityTimestampIso,
+            changed: ['status']
+          });
         }
       } else {
         updateMowerState(mowerId, {
           mowerName,
           timeZone,
           lastEventAt: lastEventTimestamp
+        });
+        publishClientChange({
+          type,
+          mowerId,
+          eventId,
+          timestamp: lastEventTimestamp,
+          changed: ['status']
         });
       }
 
@@ -95,6 +114,13 @@ export function handleIncomingEvent(data) {
           lastPosition: { lat, lon, timestamp, eventId },
           lastEventAt: lastEventTimestamp
         });
+        publishClientChange({
+          type,
+          mowerId,
+          eventId,
+          timestamp,
+          changed: ['position']
+        });
       }
 
     } else if (type === 'message-event-v2') {
@@ -122,6 +148,13 @@ export function handleIncomingEvent(data) {
           lon
         } : currentState?.lastMessage
       });
+      publishClientChange({
+        type,
+        mowerId,
+        eventId,
+        timestamp: timestampIso,
+        changed: ['message']
+      });
 
     } else if (type === 'battery-event-v2') {
       const pctRaw = attributes?.battery?.batteryPercent;
@@ -133,11 +166,25 @@ export function handleIncomingEvent(data) {
         lastBatteryAt: lastEventTimestamp,
         lastEventAt: lastEventTimestamp
       });
+      publishClientChange({
+        type,
+        mowerId,
+        eventId,
+        timestamp: lastEventTimestamp,
+        changed: ['battery']
+      });
     } else {
       updateMowerState(mowerId, {
         mowerName,
         timeZone,
         lastEventAt: lastEventTimestamp
+      });
+      publishClientChange({
+        type,
+        mowerId,
+        eventId,
+        timestamp: lastEventTimestamp,
+        changed: ['status']
       });
     }
 
