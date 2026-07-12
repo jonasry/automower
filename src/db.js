@@ -1,221 +1,11 @@
-import Database from 'better-sqlite3';
-import fs from 'node:fs/promises';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import { SESSION_SUMMARY_SQL } from './sessionSummaryQuery.js';
+import { closePool, getPool, toSafeInteger } from './dbPool.js';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const dbDir = path.join(__dirname, '../db');
-const dbPath = process.env.AUTOMOWER_DB_PATH ?? path.join(dbDir, 'mower-data.sqlite');
-await fs.mkdir(path.dirname(dbPath), { recursive: true });
-
-const db = new Database(dbPath);
-
-// Improve durability and read concurrency
-db.pragma('journal_mode = WAL');
-db.pragma('synchronous = NORMAL');
-db.pragma('foreign_keys = ON');
-
-db.exec(`
-  CREATE TABLE IF NOT EXISTS positions (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    mower_id TEXT,
-    session_id INTEGER,
-    activity TEXT,
-    lat REAL,
-    lon REAL,
-    timestamp TEXT,
-    event_id INTEGER,
-    FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE
-  )
-`);
-
-db.exec(`
-  CREATE INDEX IF NOT EXISTS idx_positions_mower_timestamp
-  ON positions (mower_id, timestamp);
-`);
-
-db.exec(`
-  CREATE UNIQUE INDEX IF NOT EXISTS idx_positions_unique
-  ON positions (mower_id, timestamp, lat, lon);
-`);
-
-const positionColumns = db.prepare('PRAGMA table_info(positions)').all();
-const hasEventIdColumn = positionColumns.some((column) => column.name === 'event_id');
-
-if (!hasEventIdColumn) {
-  db.exec('ALTER TABLE positions ADD COLUMN event_id INTEGER');
+function parsePayload(payload) {
+  if (typeof payload !== 'string') return payload;
+  return JSON.parse(payload);
 }
 
-db.exec(`
-  CREATE TABLE IF NOT EXISTS events (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    mower_id TEXT,
-    event_type TEXT NOT NULL,
-    event_timestamp TEXT,
-    received_at TEXT NOT NULL,
-    lat REAL,
-    lon REAL,
-    message_code INTEGER,
-    message_severity TEXT,
-    payload TEXT NOT NULL
-  )
-`);
-
-db.exec(`
-  CREATE INDEX IF NOT EXISTS idx_events_mower_timestamp
-  ON events (mower_id, event_timestamp);
-`);
-
-db.exec(`
-  CREATE INDEX IF NOT EXISTS idx_events_type_timestamp
-  ON events (event_type, event_timestamp);
-`);
-
-db.exec(`
-  CREATE UNIQUE INDEX IF NOT EXISTS idx_events_unique
-  ON events (mower_id, event_type, event_timestamp, payload);
-`);
-
-db.exec(`
-  CREATE UNIQUE INDEX IF NOT EXISTS idx_positions_event_unique
-  ON positions (event_id)
-  WHERE event_id IS NOT NULL;
-`);
-
-if (!hasEventIdColumn) {
-  const backfillPositionsStmt = db.prepare(`
-    UPDATE positions
-    SET event_id = (
-      SELECT id
-      FROM events
-      WHERE events.mower_id = positions.mower_id
-        AND events.event_type = 'position-event-v2'
-        AND COALESCE(events.event_timestamp, '') = COALESCE(positions.timestamp, '')
-        AND COALESCE(events.lat, 0) = COALESCE(positions.lat, 0)
-        AND COALESCE(events.lon, 0) = COALESCE(positions.lon, 0)
-      ORDER BY id DESC
-      LIMIT 1
-    )
-    WHERE event_id IS NULL
-  `);
-  backfillPositionsStmt.run();
-}
-
-const insertPositionStmt = db.prepare(
-  'INSERT OR IGNORE INTO positions (mower_id, session_id, activity, lat, lon, timestamp, event_id) VALUES (?, ?, ?, ?, ?, ?, ?)'
-);
-
-const updatePositionEventIdStmt = db.prepare(`
-  UPDATE positions
-  SET event_id = ?
-  WHERE mower_id = ?
-    AND timestamp = ?
-    AND lat = ?
-    AND lon = ?
-    AND (event_id IS NULL OR event_id = ?)
-`);
-
-const insertEventStmt = db.prepare(`
-  INSERT INTO events (
-    mower_id,
-    event_type,
-    event_timestamp,
-    received_at,
-    lat,
-    lon,
-    message_code,
-    message_severity,
-    payload
-  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-`);
-
-const selectEventIdStmt = db.prepare(`
-  SELECT id
-  FROM events
-  WHERE mower_id = ?
-    AND event_type = ?
-    AND COALESCE(event_timestamp, '') = COALESCE(?, '')
-    AND payload = ?
-  ORDER BY id DESC
-  LIMIT 1
-`);
-
-const updateEventReceivedAtStmt = db.prepare(`
-  UPDATE events
-  SET received_at = ?
-  WHERE id = ?
-`);
-
-const sessionSummaryStmt = db.prepare(SESSION_SUMMARY_SQL);
-
-const sessionMessagesStmt = db.prepare(`
-  SELECT
-    event_timestamp,
-    message_code,
-    message_severity
-  FROM events
-  WHERE mower_id = ?
-    AND event_type = 'message-event-v2'
-    AND event_timestamp IS NOT NULL
-    AND event_timestamp >= ?
-    AND event_timestamp <= ?
-  ORDER BY event_timestamp DESC
-  LIMIT ?
-`);
-
-const latestMessageStmt = db.prepare(`
-  SELECT
-    event_timestamp,
-    message_code,
-    message_severity
-  FROM events
-  WHERE mower_id = ?
-    AND event_type = 'message-event-v2'
-    AND event_timestamp IS NOT NULL
-  ORDER BY event_timestamp DESC
-  LIMIT 1
-`);
-
-const latestMessagesStmt = db.prepare(`
-  SELECT
-    event_timestamp,
-    message_code,
-    message_severity,
-    lat,
-    lon
-  FROM events
-  WHERE mower_id = ?
-    AND event_type = 'message-event-v2'
-    AND event_timestamp IS NOT NULL
-  ORDER BY event_timestamp DESC
-  LIMIT ?
-`);
-
-const latestBatteryStmt = db.prepare(`
-  SELECT
-    event_timestamp,
-    payload
-  FROM events
-  WHERE mower_id = ?
-    AND event_type = 'battery-event-v2'
-    AND event_timestamp IS NOT NULL
-  ORDER BY event_timestamp DESC
-  LIMIT 1
-`);
-
-const storedMowerIdsStmt = db.prepare(`
-  SELECT DISTINCT mower_id
-  FROM events
-  WHERE mower_id IS NOT NULL AND mower_id != ''
-  UNION
-  SELECT DISTINCT mower_id
-  FROM positions
-  WHERE mower_id IS NOT NULL AND mower_id != ''
-  ORDER BY mower_id
-`);
-
-function storeEvent({
+async function storeEvent({
   mowerId,
   eventType,
   eventTimestamp,
@@ -226,195 +16,108 @@ function storeEvent({
   messageSeverity,
   payload
 }) {
-  try {
-    const result = insertEventStmt.run(
-      mowerId,
-      eventType,
-      eventTimestamp,
-      receivedAt,
+  const result = await getPool().query(`
+    INSERT INTO events (
+      mower_id,
+      event_type,
+      event_timestamp,
+      received_at,
       lat,
       lon,
-      messageCode,
-      messageSeverity,
+      message_code,
+      message_severity,
       payload
-    );
-    return Number(result.lastInsertRowid);
-  } catch (err) {
-    if (err.code !== 'SQLITE_CONSTRAINT_UNIQUE') {
-      throw err;
-    }
-    const existing = selectEventIdStmt.get(
-      mowerId,
-      eventType,
-      eventTimestamp,
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+    ON CONFLICT (
+      (COALESCE(mower_id, '')),
+      event_type,
+      (COALESCE(event_timestamp, '-infinity'::TIMESTAMPTZ)),
       payload
-    );
-    if (!existing) {
-      throw err;
-    }
-    updateEventReceivedAtStmt.run(receivedAt, existing.id);
-    return existing.id;
-  }
-}
-
-function storePosition({ mowerId, sessionId, state, lat, lon, timestamp, eventId }) {
-  const result = insertPositionStmt.run(
+    ) DO UPDATE SET received_at = EXCLUDED.received_at
+    RETURNING id
+  `, [
     mowerId,
-    sessionId,
-    state,
+    eventType,
+    eventTimestamp,
+    receivedAt,
     lat,
     lon,
-    timestamp,
-    eventId ?? null
-  );
-  if (result.changes === 0 && eventId != null) {
-    updatePositionEventIdStmt.run(
-      eventId,
-      mowerId,
-      timestamp,
-      lat,
-      lon,
-      eventId
-    );
-  }
+    messageCode,
+    messageSeverity,
+    parsePayload(payload)
+  ]);
+
+  return toSafeInteger(result.rows[0].id, 'events.id');
 }
 
-function getPositions({ mowerId, sessionId } = {}) {
-  let query = `
-    SELECT mower_id, session_id, lat, lon, timestamp, activity
-    FROM positions
-  `;
-  const clauses = [];
-  const params = [];
+async function storePosition({ mowerId, sessionId, state, lat, lon, timestamp, eventId }) {
+  const pool = getPool();
+  const client = await pool.connect();
 
-  if (mowerId) {
-    clauses.push('mower_id = ?');
-    params.push(mowerId);
-  }
-  if (sessionId != null && sessionId !== '') {
-    clauses.push('session_id = ?');
-    params.push(sessionId);
-  }
+  try {
+    await client.query('BEGIN');
+    await client.query(`
+      INSERT INTO positions (
+        mower_id,
+        session_id,
+        activity,
+        lat,
+        lon,
+        timestamp,
+        event_id
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+      ON CONFLICT (
+        (COALESCE(mower_id, '')),
+        (COALESCE(timestamp, '-infinity'::TIMESTAMPTZ)),
+        (COALESCE(lat, 'NaN'::DOUBLE PRECISION)),
+        (COALESCE(lon, 'NaN'::DOUBLE PRECISION))
+      ) DO NOTHING
+    `, [mowerId, sessionId, state, lat, lon, timestamp, eventId ?? null]);
 
-  if (clauses.length > 0) {
-    query += ` WHERE ${clauses.join(' AND ')}`;
-  }
-
-  if (clauses.length === 1 && clauses[0].startsWith('mower_id')) {
-    query += ' ORDER BY timestamp';
-  } else {
-    query += ' ORDER BY mower_id, timestamp';
-  }
-
-  const stmt = db.prepare(query);
-  return stmt.all(...params);
-}
-
-function toDurationMinutes(start, end) {
-  const startMs = Date.parse(start ?? '');
-  const endMs = Date.parse(end ?? '');
-  if (!Number.isFinite(startMs) || !Number.isFinite(endMs)) return null;
-  if (endMs < startMs) return 0;
-  return Math.round((endMs - startMs) / 60000);
-}
-
-function getSessionSummaries({ mowerId, limit = 5, messageLimit = 3 } = {}) {
-  if (!mowerId) return [];
-  const limitValue = Number(limit);
-  const lim = Number.isFinite(limitValue) ? Math.max(1, Math.floor(limitValue)) : 5;
-  const msgLimitValue = Number(messageLimit);
-  const msgLim = Number.isFinite(msgLimitValue) ? Math.max(0, Math.floor(msgLimitValue)) : 3;
-  const rows = sessionSummaryStmt.all(mowerId, lim);
-
-  return rows.map((row) => {
-    const messages = msgLim > 0
-      ? sessionMessagesStmt.all(mowerId, row.start, row.end, msgLim).filter((msg) => msg.message_code != null)
-      : [];
-
-    return {
-      mowerId: row.mower_id,
-      sessionId: row.session_id,
-      start: row.start,
-      end: row.end,
-      durationMinutes: toDurationMinutes(row.start, row.end),
-      points: row.points,
-      messages: messages.map((msg) => ({
-        timestamp: msg.event_timestamp,
-        code: msg.message_code,
-        severity: msg.message_severity
-      }))
-    };
-  });
-}
-
-function getLatestMessage(mowerId) {
-  if (!mowerId) return null;
-  const row = latestMessageStmt.get(mowerId);
-  if (!row) return null;
-  return {
-    timestamp: row.event_timestamp,
-    code: row.message_code,
-    severity: row.message_severity
-  };
-}
-
-function getLatestMessages(mowerId, limit = 5) {
-  if (!mowerId) return [];
-  const limitValue = Number(limit);
-  const lim = Number.isFinite(limitValue) ? Math.max(1, Math.floor(limitValue)) : 5;
-
-  return latestMessagesStmt.all(mowerId, lim).map((row) => ({
-    timestamp: row.event_timestamp,
-    code: row.message_code,
-    severity: row.message_severity,
-    lat: row.lat,
-    lon: row.lon
-  }));
-}
-
-function getLatestBatteryReading(mowerId) {
-  if (!mowerId) return null;
-  const row = latestBatteryStmt.get(mowerId);
-  if (!row) return null;
-
-  let batteryPercent = null;
-  if (row.payload) {
-    try {
-      const parsed = JSON.parse(row.payload);
-      const raw = parsed?.attributes?.battery?.batteryPercent;
-      if (typeof raw === 'number' && Number.isFinite(raw)) {
-        batteryPercent = Math.round(raw);
-      } else if (typeof raw === 'string') {
-        const numeric = Number(raw);
-        if (Number.isFinite(numeric)) {
-          batteryPercent = Math.round(numeric);
-        }
-      }
-    } catch {
-      // Ignore malformed event payloads; status can still render without battery.
+    if (eventId != null) {
+      await client.query(`
+        UPDATE positions
+        SET event_id = $1
+        WHERE mower_id IS NOT DISTINCT FROM $2
+          AND timestamp IS NOT DISTINCT FROM $3
+          AND lat IS NOT DISTINCT FROM $4
+          AND lon IS NOT DISTINCT FROM $5
+          AND (event_id IS NULL OR event_id = $1)
+      `, [eventId, mowerId, timestamp, lat, lon]);
     }
-  }
 
-  return {
-    timestamp: row.event_timestamp,
-    batteryPercent
-  };
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
-function getStoredMowerIds() {
-  return storedMowerIdsStmt.all().map((row) => row.mower_id);
+async function readNotImplemented() {
+  throw new Error('PostgreSQL read helpers are not implemented');
+}
+
+const getPositions = readNotImplemented;
+const getSessionSummaries = readNotImplemented;
+const getLatestMessage = readNotImplemented;
+const getLatestMessages = readNotImplemented;
+const getLatestBatteryReading = readNotImplemented;
+const getStoredMowerIds = readNotImplemented;
+
+async function closeDb() {
+  await closePool();
 }
 
 export {
-  storePosition,
-  getPositions,
-  storeEvent,
-  getSessionSummaries,
+  closeDb,
+  getLatestBatteryReading,
   getLatestMessage,
   getLatestMessages,
-  getLatestBatteryReading,
-  getStoredMowerIds
+  getPositions,
+  getSessionSummaries,
+  getStoredMowerIds,
+  storeEvent,
+  storePosition
 };
-export function closeDb() {
-  try { db.close(); } catch {}
-}

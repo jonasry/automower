@@ -6,6 +6,8 @@ import { after } from 'node:test';
 import { runner as migrate } from 'node-pg-migrate';
 import pg from 'pg';
 
+import { closePool } from './dbPool.js';
+
 const { Pool } = pg;
 const testDatabaseUrl = process.env.TEST_DATABASE_URL;
 
@@ -55,6 +57,7 @@ runtimeUrl.searchParams.set('options', `-c search_path=${testSchema}`);
 process.env.DATABASE_URL = runtimeUrl.toString();
 
 after(async () => {
+  await closePool();
   await adminPool.query(`DROP SCHEMA IF EXISTS ${quotedSchema} CASCADE`);
   await adminPool.end();
 });
