@@ -24,7 +24,7 @@ CREATE UNIQUE INDEX idx_events_unique
     COALESCE(mower_id, ''),
     event_type,
     COALESCE(event_timestamp, '-infinity'::TIMESTAMPTZ),
-    payload
+    MD5(payload::TEXT)
   );
 
 CREATE TABLE positions (

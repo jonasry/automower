@@ -99,15 +99,19 @@ export async function handleIncomingEvent(data) {
         const sessionId = currentState?.sessionId ?? currentState?.timestamp ?? Date.now();
         const state = currentState?.activity ?? 'UNKNOWN';
 
-        await storePosition({
-          mowerId,
-          sessionId,
-          state,
-          lat,
-          lon,
-          timestamp,
-          eventId
-        });
+        try {
+          await storePosition({
+            mowerId,
+            sessionId,
+            state,
+            lat,
+            lon,
+            timestamp,
+            eventId
+          });
+        } catch (err) {
+          console.error('Failed to persist position:', err);
+        }
 
         updateMowerState(mowerId, {
           mowerName,

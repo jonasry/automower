@@ -33,7 +33,7 @@ async function storeEvent({
       (COALESCE(mower_id, '')),
       event_type,
       (COALESCE(event_timestamp, '-infinity'::TIMESTAMPTZ)),
-      payload
+      (MD5(payload::TEXT))
     ) DO UPDATE SET received_at = EXCLUDED.received_at
     RETURNING id
   `, [

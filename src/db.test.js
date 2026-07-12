@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { randomBytes } from 'node:crypto';
 
 import { getPool } from './dbPool.js';
 import {
@@ -42,6 +43,21 @@ test('deduplicates equivalent JSON events and refreshes received_at', async () =
   );
   assert.equal(result.rows[0].received_at.toISOString(), later);
   assert.deepEqual(result.rows[0].payload, { a: 1, b: 2 });
+});
+
+test('deduplicates event payloads larger than a PostgreSQL B-tree index entry', async () => {
+  const payload = JSON.stringify({ samples: randomBytes(12000).toString('hex') });
+  const firstId = await storeEvent(event({
+    mowerId: 'mower-large-event',
+    payload
+  }));
+  const secondId = await storeEvent(event({
+    mowerId: 'mower-large-event',
+    receivedAt: '2026-07-12T10:00:03.000Z',
+    payload
+  }));
+
+  assert.equal(secondId, firstId);
 });
 
 test('deduplicates events whose nullable key fields are absent', async () => {
