@@ -4,7 +4,7 @@
   "description": "",
   "main": "src/app.js",
   "scripts": {
-    "test": "node --test",
+    "test": "node --import ./src/testDbSetup.js --test",
     "start": "node src/app.js",
     "replay": "node scripts/replay-events.js"
   },

@@ -6,8 +6,8 @@ import { SESSION_SUMMARY_SQL } from './sessionSummaryQuery.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const dbDir = path.join(__dirname, '../db');
-await fs.mkdir(dbDir, { recursive: true });
-const dbPath = path.join(dbDir, 'mower-data.sqlite');
+const dbPath = process.env.AUTOMOWER_DB_PATH ?? path.join(dbDir, 'mower-data.sqlite');
+await fs.mkdir(path.dirname(dbPath), { recursive: true });
 
 const db = new Database(dbPath);
 

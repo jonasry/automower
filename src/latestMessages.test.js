@@ -1,9 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 
 import { storeEvent, getLatestMessages } from './db.js';
 
 test('getLatestMessages returns latest mower message events with coordinates', () => {
+  assert.equal(fs.existsSync(process.env.AUTOMOWER_DB_PATH), true);
+
   const mowerId = '__test_latest_messages_mower__';
   const otherMowerId = '__test_latest_messages_other_mower__';
 

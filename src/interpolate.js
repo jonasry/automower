@@ -79,13 +79,9 @@ function interpolateSession(points, output, session_id) {
   output.push([b.lat, b.lon, weight, session_id, true, b.timestamp]);
 }
 
-function getInterpolatedPositions({ mowerId, sessionId } = {}) {
-  const rows = getPositions({ mowerId, sessionId });
-
+function interpolatePositionRows(rows) {
   const interpolated = [];
   const grouped = new Map();
-
-  let session_id = 0
 
   // Group rows by mower ID
   rows.forEach(row => {
@@ -95,33 +91,35 @@ function getInterpolatedPositions({ mowerId, sessionId } = {}) {
 
   for (const [mowerId, points] of grouped.entries()) {
     let session = [];
-    
-    session_id = points[0]?.session_id ?? 0;
+    let sessionId = null;
 
     for (let i = 0; i < points.length; i++) {
       const curr = points[i];
 
-      if (curr.session_id == session_id) {
-        if (curr.activity === 'MOWING') {
-            session.push(curr);
+      if (curr.session_id !== sessionId) {
+        if (session.length > 1) {
+          interpolateSession(session, interpolated, sessionId);
         }
-      } else if (session.length > 1) {
-        // Process session when interrupted
-        interpolateSession(session, interpolated, session_id);
         session = [];
-        session_id = curr.session_id;
-      } else {
-        session = [];
-        session_id = curr.session_id;
+        sessionId = curr.session_id;
+      }
+
+      if (curr.activity === 'MOWING') {
+        session.push(curr);
       }
     }
 
     if (session.length > 1) {
-      interpolateSession(session, interpolated, session_id);
+      interpolateSession(session, interpolated, sessionId);
     }
   }
 
   return interpolated;
 }
 
-export { getInterpolatedPositions };
+function getInterpolatedPositions({ mowerId, sessionId } = {}) {
+  const rows = getPositions({ mowerId, sessionId });
+  return interpolatePositionRows(rows);
+}
+
+export { getInterpolatedPositions, interpolatePositionRows };
