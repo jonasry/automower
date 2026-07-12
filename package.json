@@ -16,7 +16,7 @@
   "type": "module",
   "dependencies": {
     "express": "^5.1.0",
-    "node-pg-migrate": "^8.0.4",
+    "node-pg-migrate": "7.4.0",
     "pg": "^8.22.0",
     "ws": "^8.18.3"
   }

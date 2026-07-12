@@ -1,0 +1,47 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-automower}
+      POSTGRES_USER: ${POSTGRES_USER:-automower}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-automower-local}
+    ports:
+      - "${POSTGRES_PORT:-5433}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  migrate:
+    build: .
+    command: npm run db:migrate
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-automower}:${POSTGRES_PASSWORD:-automower-local}@postgres:5432/${POSTGRES_DB:-automower}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  app:
+    build: .
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-automower}:${POSTGRES_PASSWORD:-automower-local}@postgres:5432/${POSTGRES_DB:-automower}
+      HQ_API_KEY: ${HQ_API_KEY}
+      HQ_API_SECRET: ${HQ_API_SECRET}
+      PORT: 3000
+      PG_POOL_MAX: ${PG_POOL_MAX:-10}
+      PG_IDLE_TIMEOUT_MS: ${PG_IDLE_TIMEOUT_MS:-30000}
+      PG_CONNECTION_TIMEOUT_MS: ${PG_CONNECTION_TIMEOUT_MS:-5000}
+      PG_QUERY_TIMEOUT_MS: ${PG_QUERY_TIMEOUT_MS:-10000}
+    ports:
+      - "${PORT:-3000}:3000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+volumes:
+  postgres-data:

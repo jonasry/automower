@@ -4,4 +4,7 @@
 *.sqlite
 *.sqlite-shm
 *.sqlite-wal
+*.dump
+.env
+.postgres-data/
 .worktrees/

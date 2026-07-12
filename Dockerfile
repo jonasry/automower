@@ -12,10 +12,7 @@ RUN npm ci --omit=dev \
 # Bundle app source
 COPY src/ ./src/
 COPY public/ ./public/
-COPY messages.txt ./
-
-# Directory for the database file
-RUN mkdir ./db
+COPY migrations/ ./migrations/
 
 EXPOSE 3000
 CMD ["npm", "start"]
