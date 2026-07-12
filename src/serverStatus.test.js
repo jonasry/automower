@@ -11,7 +11,7 @@ test('/api/status includes latest messages for mowers found only in persisted ev
   mowerStates.clear();
 
   for (let i = 0; i < 6; i += 1) {
-    storeEvent({
+    await storeEvent({
       mowerId,
       eventType: 'message-event-v2',
       eventTimestamp: `2026-05-09T12:0${i}:00.000Z`,
@@ -24,7 +24,7 @@ test('/api/status includes latest messages for mowers found only in persisted ev
     });
   }
 
-  const payload = buildStatusPayload();
+  const payload = await buildStatusPayload();
   const mower = payload.mowers.find((entry) => entry.id === mowerId);
 
   assert.ok(mower);

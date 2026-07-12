@@ -117,8 +117,8 @@ function interpolatePositionRows(rows) {
   return interpolated;
 }
 
-function getInterpolatedPositions({ mowerId, sessionId } = {}) {
-  const rows = getPositions({ mowerId, sessionId });
+async function getInterpolatedPositions({ mowerId, sessionId } = {}) {
+  const rows = await getPositions({ mowerId, sessionId });
   return interpolatePositionRows(rows);
 }
 

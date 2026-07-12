@@ -24,7 +24,7 @@ app.get('/api/events', (req, res) => {
 
 app.use(express.static(path.join(__dirname, '../public')));
 
-app.get('/api/positions', (req, res) => {
+app.get('/api/positions', async (req, res) => {
   const { mowerId, sessionId } = req.query;
   const heatFilters = {};
   const trailFilters = {};
@@ -43,29 +43,29 @@ app.get('/api/positions', (req, res) => {
     }
   }
 
-  const heatData = getInterpolatedPositions(heatFilters);
+  const heatData = await getInterpolatedPositions(heatFilters);
   const trailData = selectedSessionId == null
     ? heatData
-    : getInterpolatedPositions(trailFilters);
+    : await getInterpolatedPositions(trailFilters);
 
   res.set('Cache-Control', 'public, max-age=15');
   res.json(buildPositionsPayload({ heatData, trailData, selectedSessionId }));
 });
 
-app.get('/api/status', (req, res) => {
+app.get('/api/status', async (req, res) => {
   const now = Date.now();
   if (statusCache.data && statusCache.expires > now) {
     res.set('Cache-Control', 'public, max-age=10');
     return res.json(statusCache.data);
   }
 
-  const payload = buildStatusPayload();
+  const payload = await buildStatusPayload();
   statusCache = { data: payload, expires: now + 10000 };
   res.set('Cache-Control', 'public, max-age=10');
   res.json(payload);
 });
 
-function buildStatusPayload() {
+async function buildStatusPayload() {
   const mowers = [];
   const sessions = {};
 
@@ -88,19 +88,25 @@ function buildStatusPayload() {
     return latestIso;
   };
 
+  const storedMowerIds = await getStoredMowerIds();
   const mowerIds = new Set([
     ...mowerStates.keys(),
-    ...getStoredMowerIds()
+    ...storedMowerIds
   ]);
 
   for (const mowerId of mowerIds) {
     const state = mowerStates.get(mowerId) ?? {};
-    const latestMessageFromDb = state.lastMessage ? null : getLatestMessage(mowerId);
+    const [latestMessageFromDb, latestMessages, batteryFromDb, sessionRows] = await Promise.all([
+      state.lastMessage ? Promise.resolve(null) : getLatestMessage(mowerId),
+      getLatestMessages(mowerId, 5),
+      getLatestBatteryReading(mowerId),
+      getSessionSummaries({ mowerId, limit: 5, messageLimit: 3 })
+    ]);
     const lastMessage = state.lastMessage ?? latestMessageFromDb;
     const lastMessageDescription = lastMessage?.description ?? (
       lastMessage?.code != null ? messageDescriptions.get(lastMessage.code) ?? null : null
     );
-    const latestMessages = getLatestMessages(mowerId, 5).map((message) => ({
+    const normalizedLatestMessages = latestMessages.map((message) => ({
       code: message.code ?? null,
       severity: message.severity ?? null,
       timestamp: message.timestamp ?? null,
@@ -109,7 +115,6 @@ function buildStatusPayload() {
       lon: message.lon ?? null
     }));
 
-    const batteryFromDb = getLatestBatteryReading(mowerId);
     const stateBatteryTs = state.lastBatteryAt ?? null;
     const dbBatteryTs = batteryFromDb?.timestamp ?? null;
     const stateBatteryMs = safeParseTime(stateBatteryTs);
@@ -156,12 +161,12 @@ function buildStatusPayload() {
             timestamp: lastMessage.timestamp ?? null
           }
         : null,
-      messages: latestMessages,
+      messages: normalizedLatestMessages,
       lastPosition: state.lastPosition ?? null
     };
     mowers.push(mowerSummary);
 
-    sessions[mowerId] = getSessionSummaries({ mowerId, limit: 5, messageLimit: 3 }).map((session) => ({
+    sessions[mowerId] = sessionRows.map((session) => ({
       id: session.sessionId,
       start: session.start,
       end: session.end,
@@ -178,6 +183,26 @@ function buildStatusPayload() {
 
   return { mowers, sessions };
 }
+
+const unavailableDatabaseCodes = new Set([
+  'ECONNREFUSED',
+  'ECONNRESET',
+  'ETIMEDOUT',
+  '57P01',
+  '57P02',
+  '57P03'
+]);
+
+app.use((err, req, res, next) => {
+  if (res.headersSent) return next(err);
+
+  const unavailable = unavailableDatabaseCodes.has(err?.code);
+  const status = unavailable ? 503 : 500;
+  const code = unavailable ? 'DATABASE_UNAVAILABLE' : 'INTERNAL_ERROR';
+  const message = unavailable ? 'Database temporarily unavailable' : 'Internal server error';
+  console.error(`Database-backed request failed for ${req.method} ${req.path}:`, err);
+  res.status(status).json({ error: { code, message } });
+});
 
 export function startHttpServer(port = process.env.PORT || 3000) {
   app.listen(port, () => {
