@@ -8,10 +8,9 @@ async function startRuntime({
   apiSecret
 }) {
   await assertDatabaseReady();
-  const server = startHttpServer();
   await loadMowerState(token, apiKey, apiSecret);
   await startWebSocket(apiKey, apiSecret);
-  return server;
+  return startHttpServer();
 }
 
 function withTimeout(promise, timeoutMs) {

@@ -10,13 +10,35 @@ let pingInterval = null;
 let reconnectTimer = null;
 let reconnectAttempts = 0;
 let wss = null;
-let ingestionChain = Promise.resolve();
+const pendingPersistence = new Set();
+export const MAX_PENDING_PERSISTENCE = 100;
 
 function publishClientChange({ type, mowerId, eventId, timestamp, changed }) {
   clientEventBus.publish({ type, mowerId, eventId, timestamp, changed });
 }
 
-export async function handleIncomingEvent(data) {
+async function persistIncomingEvent(shapedEvent, position) {
+  let eventId = null;
+  if (shapedEvent) {
+    try {
+      eventId = await storeEvent(shapedEvent);
+    } catch (err) {
+      console.error('Failed to persist event:', err);
+    }
+  }
+
+  if (position) {
+    try {
+      await storePosition({ ...position, eventId });
+    } catch (err) {
+      console.error('Failed to persist position:', err);
+    }
+  }
+
+  return eventId;
+}
+
+export async function handleIncomingEvent(data, { persist = true } = {}) {
   if (!data.length) return;
 
   try {
@@ -34,17 +56,13 @@ export async function handleIncomingEvent(data) {
     const mowerTimeZone = currentState?.timeZone ?? attributes?.settings?.timeZone ?? null;
     const shapedEvent = shapeEventForStorage(message, { mowerTimeZone });
     let eventId = null;
-    let eventTimestampIso = null;
-    if (shapedEvent) {
-      eventTimestampIso = shapedEvent.eventTimestamp;
-      try {
-        eventId = await storeEvent(shapedEvent);
-      } catch (err) {
-        console.error('Failed to persist event:', err);
-      }
-    }
+    const eventTimestampIso = shapedEvent?.eventTimestamp ?? null;
+    let positionToStore = null;
 
-    if (!type || !attributes || !mowerId) return;
+    if (!type || !attributes || !mowerId) {
+      if (persist) await persistIncomingEvent(shapedEvent, null);
+      return;
+    }
 
     const mowerIdShort = mowerId.substring(0, 8);
     const mowerName = currentState?.mowerName || 'Unknown';
@@ -99,19 +117,7 @@ export async function handleIncomingEvent(data) {
         const sessionId = currentState?.sessionId ?? currentState?.timestamp ?? Date.now();
         const state = currentState?.activity ?? 'UNKNOWN';
 
-        try {
-          await storePosition({
-            mowerId,
-            sessionId,
-            state,
-            lat,
-            lon,
-            timestamp,
-            eventId
-          });
-        } catch (err) {
-          console.error('Failed to persist position:', err);
-        }
+        positionToStore = { mowerId, sessionId, state, lat, lon, timestamp };
 
         updateMowerState(mowerId, {
           mowerName,
@@ -193,22 +199,44 @@ export async function handleIncomingEvent(data) {
       });
     }
 
+    if (persist) {
+      eventId = await persistIncomingEvent(shapedEvent, positionToStore);
+      if (positionToStore && eventId != null) {
+        const latestState = getMowerState(mowerId);
+        if (latestState?.lastPosition?.timestamp === positionToStore.timestamp) {
+          updateMowerState(mowerId, {
+            lastPosition: { ...latestState.lastPosition, eventId }
+          });
+        }
+      }
+    }
+
   } catch (err) {
     console.error('WebSocket event error:', err);
   }
 }
 
 export function enqueueIncomingEvent(data) {
-  ingestionChain = ingestionChain
-    .then(() => handleIncomingEvent(data))
-    .catch((err) => {
-      console.error('Queued WebSocket event error:', err);
-    });
-  return ingestionChain;
+  if (pendingPersistence.size >= MAX_PENDING_PERSISTENCE) {
+    console.warn('Dropping event persistence because the database backlog is full');
+    return handleIncomingEvent(data, { persist: false });
+  }
+
+  const task = handleIncomingEvent(data);
+  pendingPersistence.add(task);
+  task.then(
+    () => pendingPersistence.delete(task),
+    () => pendingPersistence.delete(task)
+  );
+  return task;
 }
 
 export function drainIncomingEvents() {
-  return ingestionChain;
+  return Promise.allSettled([...pendingPersistence]);
+}
+
+export function getPendingPersistenceCount() {
+  return pendingPersistence.size;
 }
 
 export async function startWebSocket(apiKey, apiSecret) {

@@ -152,5 +152,7 @@ Access tokens are cached in
 `$HOME/.config/autoplanner/access_token.json` with owner-only permissions. The
 WebSocket reconnects after the Husqvarna service's timeout or a network
 interruption and sends a ping every 60 seconds. PostgreSQL failures do not
-terminate the WebSocket; affected writes are logged, and the app does not
-promise to replay telemetry missed during a database outage.
+terminate the WebSocket. Live mower state continues updating, while database
+work is bounded to 100 pending events; further persistence is dropped and
+logged until capacity returns. The app does not replay telemetry missed during
+a database outage.

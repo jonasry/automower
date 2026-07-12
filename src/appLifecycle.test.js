@@ -18,7 +18,7 @@ test('validates PostgreSQL before starting HTTP and WebSocket services', async (
   });
 
   assert.equal(result, server);
-  assert.deepEqual(calls, ['ready', 'http', 'state', 'websocket']);
+  assert.deepEqual(calls, ['ready', 'state', 'websocket', 'http']);
 });
 
 test('does not start services when database readiness fails', async () => {

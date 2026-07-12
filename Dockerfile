@@ -13,6 +13,7 @@ RUN npm ci --omit=dev \
 COPY src/ ./src/
 COPY public/ ./public/
 COPY migrations/ ./migrations/
+COPY docs/swagger/messages.txt ./docs/swagger/messages.txt
 
 EXPOSE 3000
 CMD ["npm", "start"]

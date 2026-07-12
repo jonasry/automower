@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
 
 import { getPool } from './dbPool.js';
+import { assertDatabaseReady } from './dbMigrations.js';
 import {
   getLatestBatteryReading,
   getPositions,
@@ -26,6 +27,10 @@ function event(overrides = {}) {
     ...overrides
   };
 }
+
+test('recognizes the complete repository migration set in PostgreSQL', async () => {
+  await assertDatabaseReady();
+});
 
 test('deduplicates equivalent JSON events and refreshes received_at', async () => {
   const firstId = await storeEvent(event());

@@ -51,3 +51,17 @@ test('rejects a database with pending migrations', async () => {
     /Database schema is not fully migrated; run npm run db:migrate/
   );
 });
+
+test('rejects when a future repository migration has not been applied', async () => {
+  const pool = {
+    async query(sql) {
+      if (sql === 'SELECT 1') return { rows: [{ '?column?': 1 }] };
+      return { rows: [{ name: '001_initial' }] };
+    }
+  };
+
+  await assert.rejects(
+    assertDatabaseReady(pool, ['001_initial', '002_future']),
+    /Database schema is not fully migrated; run npm run db:migrate/
+  );
+});
