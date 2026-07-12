@@ -457,4 +457,3 @@ Expected: no output.
 git add Dockerfile compose.yaml .env.example .gitignore README.md
 git commit -m "Document PostgreSQL deployment"
 ```
-
