@@ -249,6 +249,8 @@ export async function startWebSocket(apiKey, apiSecret) {
 }
 
 export async function stopWebSocket() {
+  console.warn('⚠️ Stop WebSocket called');
+
   if (reconnectTimer) {
     clearTimeout(reconnectTimer);
     reconnectTimer = null;
