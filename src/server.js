@@ -205,9 +205,10 @@ app.use((err, req, res, next) => {
 });
 
 export function startHttpServer(port = process.env.PORT || 3000) {
-  app.listen(port, () => {
+  const server = app.listen(port, () => {
     console.log(`🌍 HTTP server listening at http://localhost:${port}/map.html`);
   });
+  return server;
 }
 
 export { app, buildStatusPayload };

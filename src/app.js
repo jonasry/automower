@@ -1,8 +1,10 @@
 import { startHttpServer } from './server.js';
-import { startWebSocket, stopWebSocket } from './amconnect.js';
+import { drainIncomingEvents, startWebSocket, stopWebSocket } from './amconnect.js';
 import { updateMowerState } from './state.js';
 import { getToken, refreshToken, loadCredentials } from './auth.js';
 import { closeDb } from './db.js';
+import { assertDatabaseReady } from './dbMigrations.js';
+import { createShutdown, startRuntime } from './appLifecycle.js';
 
 async function getMowerData(accessToken, apiKey) {
   const response = await fetch('https://api.amc.husqvarna.dev/v1/mowers', {
@@ -78,19 +80,38 @@ async function loadMowerState(token, apiKey, apiSecret) {
 
   let token = await getToken(apiKey, apiSecret);
 
-  startHttpServer();
+  const server = await startRuntime({
+    assertDatabaseReady,
+    startHttpServer,
+    loadMowerState,
+    startWebSocket,
+    token,
+    apiKey,
+    apiSecret
+  });
 
-  await loadMowerState(token, apiKey, apiSecret);
-  await startWebSocket(apiKey, apiSecret);
-
-  const shutdown = async () => {
-    try {
-      await stopWebSocket();
-      closeDb();
-    } finally {
-      process.exit(0);
-    }
+  const closeHttpServer = () => new Promise((resolve, reject) => {
+    if (!server.listening) return resolve();
+    server.close((error) => error ? reject(error) : resolve());
+  });
+  const shutdown = createShutdown({
+    stopWebSocket,
+    closeHttpServer,
+    drainIncomingEvents,
+    closeDb,
+    timeoutMs: 10000
+  });
+  const handleSignal = () => {
+    shutdown()
+      .then(() => process.exit(0))
+      .catch((error) => {
+        console.error('Graceful shutdown failed:', error);
+        process.exit(1);
+      });
   };
-  process.on('SIGINT', shutdown);
-  process.on('SIGTERM', shutdown);
-})();
+  process.on('SIGINT', handleSignal);
+  process.on('SIGTERM', handleSignal);
+})().catch((error) => {
+  console.error('Application startup failed:', error);
+  process.exitCode = 1;
+});
