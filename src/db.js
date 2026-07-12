@@ -1,4 +1,5 @@
 import { closePool, getPool, toSafeInteger } from './dbPool.js';
+import { SESSION_SUMMARY_SQL } from './sessionSummaryQuery.js';
 
 function parsePayload(payload) {
   if (typeof payload !== 'string') return payload;
@@ -95,16 +96,168 @@ async function storePosition({ mowerId, sessionId, state, lat, lon, timestamp, e
   }
 }
 
-async function readNotImplemented() {
-  throw new Error('PostgreSQL read helpers are not implemented');
+function iso(value) {
+  if (value == null) return null;
+  return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
 }
 
-const getPositions = readNotImplemented;
-const getSessionSummaries = readNotImplemented;
-const getLatestMessage = readNotImplemented;
-const getLatestMessages = readNotImplemented;
-const getLatestBatteryReading = readNotImplemented;
-const getStoredMowerIds = readNotImplemented;
+function normalizedLimit(value, fallback, minimum = 1) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? Math.max(minimum, Math.floor(numeric)) : fallback;
+}
+
+async function getPositions({ mowerId, sessionId } = {}) {
+  const clauses = [];
+  const params = [];
+
+  if (mowerId) {
+    params.push(mowerId);
+    clauses.push(`mower_id = $${params.length}`);
+  }
+  if (sessionId != null && sessionId !== '') {
+    params.push(sessionId);
+    clauses.push(`session_id = $${params.length}`);
+  }
+
+  const where = clauses.length ? ` WHERE ${clauses.join(' AND ')}` : '';
+  const order = mowerId && sessionId == null ? 'timestamp' : 'mower_id, timestamp';
+  const result = await getPool().query(`
+    SELECT mower_id, session_id, lat, lon, timestamp, activity
+    FROM positions${where}
+    ORDER BY ${order}
+  `, params);
+
+  return result.rows.map((row) => ({
+    ...row,
+    session_id: row.session_id == null ? null : toSafeInteger(row.session_id, 'positions.session_id'),
+    timestamp: iso(row.timestamp)
+  }));
+}
+
+function toDurationMinutes(start, end) {
+  const startMs = Date.parse(start ?? '');
+  const endMs = Date.parse(end ?? '');
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs)) return null;
+  if (endMs < startMs) return 0;
+  return Math.round((endMs - startMs) / 60000);
+}
+
+async function getSessionSummaries({ mowerId, limit = 5, messageLimit = 3 } = {}) {
+  if (!mowerId) return [];
+  const lim = normalizedLimit(limit, 5);
+  const msgLim = normalizedLimit(messageLimit, 3, 0);
+  const result = await getPool().query(SESSION_SUMMARY_SQL, [mowerId, lim]);
+
+  return Promise.all(result.rows.map(async (row) => {
+    const start = iso(row.start);
+    const end = iso(row.end);
+    let messageRows = [];
+    if (msgLim > 0) {
+      const messages = await getPool().query(`
+        SELECT event_timestamp, message_code, message_severity
+        FROM events
+        WHERE mower_id = $1
+          AND event_type = 'message-event-v2'
+          AND event_timestamp IS NOT NULL
+          AND event_timestamp >= $2
+          AND event_timestamp <= $3
+        ORDER BY event_timestamp DESC
+        LIMIT $4
+      `, [mowerId, start, end, msgLim]);
+      messageRows = messages.rows.filter((message) => message.message_code != null);
+    }
+
+    return {
+      mowerId: row.mower_id,
+      sessionId: toSafeInteger(row.session_id, 'positions.session_id'),
+      start,
+      end,
+      durationMinutes: toDurationMinutes(start, end),
+      points: toSafeInteger(row.points, 'session.points'),
+      messages: messageRows.map((message) => ({
+        timestamp: iso(message.event_timestamp),
+        code: message.message_code,
+        severity: message.message_severity
+      }))
+    };
+  }));
+}
+
+async function getLatestMessage(mowerId) {
+  if (!mowerId) return null;
+  const result = await getPool().query(`
+    SELECT event_timestamp, message_code, message_severity
+    FROM events
+    WHERE mower_id = $1
+      AND event_type = 'message-event-v2'
+      AND event_timestamp IS NOT NULL
+    ORDER BY event_timestamp DESC
+    LIMIT 1
+  `, [mowerId]);
+  const row = result.rows[0];
+  if (!row) return null;
+  return {
+    timestamp: iso(row.event_timestamp),
+    code: row.message_code,
+    severity: row.message_severity
+  };
+}
+
+async function getLatestMessages(mowerId, limit = 5) {
+  if (!mowerId) return [];
+  const lim = normalizedLimit(limit, 5);
+  const result = await getPool().query(`
+    SELECT event_timestamp, message_code, message_severity, lat, lon
+    FROM events
+    WHERE mower_id = $1
+      AND event_type = 'message-event-v2'
+      AND event_timestamp IS NOT NULL
+    ORDER BY event_timestamp DESC
+    LIMIT $2
+  `, [mowerId, lim]);
+  return result.rows.map((row) => ({
+    timestamp: iso(row.event_timestamp),
+    code: row.message_code,
+    severity: row.message_severity,
+    lat: row.lat,
+    lon: row.lon
+  }));
+}
+
+async function getLatestBatteryReading(mowerId) {
+  if (!mowerId) return null;
+  const result = await getPool().query(`
+    SELECT event_timestamp, payload
+    FROM events
+    WHERE mower_id = $1
+      AND event_type = 'battery-event-v2'
+      AND event_timestamp IS NOT NULL
+    ORDER BY event_timestamp DESC
+    LIMIT 1
+  `, [mowerId]);
+  const row = result.rows[0];
+  if (!row) return null;
+
+  const raw = row.payload?.attributes?.battery?.batteryPercent;
+  const numeric = Number(raw);
+  return {
+    timestamp: iso(row.event_timestamp),
+    batteryPercent: raw != null && Number.isFinite(numeric) ? Math.round(numeric) : null
+  };
+}
+
+async function getStoredMowerIds() {
+  const result = await getPool().query(`
+    SELECT mower_id
+    FROM (
+      SELECT DISTINCT mower_id FROM events WHERE mower_id IS NOT NULL AND mower_id != ''
+      UNION
+      SELECT DISTINCT mower_id FROM positions WHERE mower_id IS NOT NULL AND mower_id != ''
+    ) stored_mowers
+    ORDER BY mower_id
+  `);
+  return result.rows.map((row) => row.mower_id);
+}
 
 async function closeDb() {
   await closePool();

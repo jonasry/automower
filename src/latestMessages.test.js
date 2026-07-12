@@ -1,16 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
-
 import { storeEvent, getLatestMessages } from './db.js';
 
-test('getLatestMessages returns latest mower message events with coordinates', () => {
-  assert.equal(fs.existsSync(process.env.AUTOMOWER_DB_PATH), true);
-
+test('getLatestMessages returns latest mower message events with coordinates', async () => {
   const mowerId = '__test_latest_messages_mower__';
   const otherMowerId = '__test_latest_messages_other_mower__';
 
-  storeEvent({
+  await storeEvent({
     mowerId,
     eventType: 'message-event-v2',
     eventTimestamp: '2026-05-09T10:00:00.000Z',
@@ -21,7 +17,7 @@ test('getLatestMessages returns latest mower message events with coordinates', (
     messageSeverity: 'INFO',
     payload: JSON.stringify({ test: 'old' })
   });
-  storeEvent({
+  await storeEvent({
     mowerId,
     eventType: 'battery-event-v2',
     eventTimestamp: '2026-05-09T10:30:00.000Z',
@@ -32,7 +28,7 @@ test('getLatestMessages returns latest mower message events with coordinates', (
     messageSeverity: null,
     payload: JSON.stringify({ test: 'battery' })
   });
-  storeEvent({
+  await storeEvent({
     mowerId,
     eventType: 'message-event-v2',
     eventTimestamp: '2026-05-09T11:00:00.000Z',
@@ -43,7 +39,7 @@ test('getLatestMessages returns latest mower message events with coordinates', (
     messageSeverity: 'ERROR',
     payload: JSON.stringify({ test: 'middle' })
   });
-  storeEvent({
+  await storeEvent({
     otherMowerId,
     eventType: 'message-event-v2',
     eventTimestamp: '2026-05-09T11:30:00.000Z',
@@ -54,7 +50,7 @@ test('getLatestMessages returns latest mower message events with coordinates', (
     messageSeverity: 'ERROR',
     payload: JSON.stringify({ test: 'other-mower' })
   });
-  storeEvent({
+  await storeEvent({
     mowerId,
     eventType: 'message-event-v2',
     eventTimestamp: '2026-05-09T12:00:00.000Z',
@@ -66,7 +62,7 @@ test('getLatestMessages returns latest mower message events with coordinates', (
     payload: JSON.stringify({ test: 'new' })
   });
 
-  assert.deepEqual(getLatestMessages(mowerId, 2), [
+  assert.deepEqual(await getLatestMessages(mowerId, 2), [
     {
       timestamp: '2026-05-09T12:00:00.000Z',
       code: 200,
