@@ -1,0 +1,341 @@
+# PostgreSQL Migration Design
+
+## Summary
+
+Replace the application's SQLite persistence with PostgreSQL while preserving
+the current browser UI and HTTP response formats. PostgreSQL becomes the only
+runtime database. Existing data in `db/mower-data.sqlite` will not be imported;
+the PostgreSQL deployment starts with an empty schema.
+
+The application will connect through `DATABASE_URL`. The repository will also
+provide Docker Compose configuration for a self-contained local deployment,
+while supporting the PostgreSQL instance already available on the development
+machine and externally managed PostgreSQL services.
+
+## Goals
+
+- Replace `better-sqlite3` with the `pg` PostgreSQL client and a shared
+  connection pool.
+- Preserve the behavior of event ingestion, position storage, session
+  summaries, message history, battery lookup, heatmap data, and stored mower
+  discovery.
+- Preserve the public shapes returned by `/api/positions` and `/api/status`.
+- Use PostgreSQL-native column types and atomic conflict handling.
+- Manage the schema with explicit, ordered migrations rather than application
+  startup side effects.
+- Support direct local development, Docker Compose, automated integration
+  testing, and hosted PostgreSQL through the same connection-string contract.
+- Fail clearly when configuration, connectivity, or schema state is invalid.
+
+## Non-goals
+
+- Importing or converting the existing SQLite database.
+- Reading from or writing to SQLite after cutover.
+- Temporarily writing each event to both databases.
+- Introducing an ORM or retaining a database-neutral persistence layer.
+- Changing the browser UI or the public API response formats.
+- Provisioning a production PostgreSQL service, backups scheduler, replication,
+  failover, or other high-availability infrastructure.
+
+## Baseline and dependencies
+
+- Node.js 18 or later remains supported.
+- PostgreSQL 15 or later is required.
+- The Docker Compose development service uses PostgreSQL 16.
+- `better-sqlite3` is removed.
+- `pg` is added for runtime access.
+- `node-pg-migrate` is added to run and report on ordered SQL migrations.
+  Migrations remain explicit commands and never run as a side effect of normal
+  application startup.
+
+## Architecture
+
+`src/db.js` remains the persistence boundary and exports the domain-oriented
+helpers used by ingestion, interpolation, and status generation. Its
+implementation changes from a synchronous process-local SQLite connection to a
+shared `pg.Pool`. No caller constructs SQL or obtains a pool client directly.
+
+Every database helper returns a promise. The async contract propagates through
+the following call paths:
+
+- `src/amconnect.js` awaits event persistence before inserting a linked
+  position and before publishing a client notification that contains the
+  persisted event ID.
+- `src/interpolate.js` awaits position reads before interpolating rows.
+- `src/server.js` uses async Express handlers and awaits position and status
+  queries.
+- `scripts/replay-events.js` awaits each event so playback remains ordered and
+  cannot exit while writes are queued.
+- `src/app.js` verifies database readiness before opening the HTTP listener or
+  starting the Husqvarna WebSocket.
+- Shutdown stops new work, waits for in-flight event handling, closes the HTTP
+  server and WebSocket, and then drains the PostgreSQL pool.
+
+The database module owns normalization at the persistence boundary. PostgreSQL
+timestamps are returned to callers as ISO-8601 strings, JSON payloads are
+handled as parsed values, and identity/session values are converted consistently
+to the numeric shapes used by the existing application. Conversion of database
+`BIGINT` values must reject values outside JavaScript's safe integer range
+rather than silently losing precision.
+
+## Configuration
+
+### Required variables
+
+- `DATABASE_URL` is required for normal application startup and database
+  migration commands.
+- `TEST_DATABASE_URL` is required for integration tests.
+
+The application must not fall back to a local filename, an implicit PostgreSQL
+database, or `DATABASE_URL` while running integration tests. This prevents a
+test run from modifying a developer or production database accidentally.
+
+### Optional variables
+
+Optional TLS and pool settings may be exposed as environment variables. Their
+names, types, and defaults must be documented in the README and represented by
+safe placeholders in `.env.example`. Invalid numeric or boolean values fail
+startup with a configuration error. TLS must support hosted providers without
+disabling certificate validation by default.
+
+Database URLs and credentials must never be logged, committed, or embedded in
+the Docker image. Existing Husqvarna credential handling remains unchanged.
+
+## PostgreSQL schema
+
+The first migration creates the complete empty schema.
+
+### `events`
+
+| Column | Type | Constraints |
+| --- | --- | --- |
+| `id` | `BIGINT GENERATED BY DEFAULT AS IDENTITY` | Primary key |
+| `mower_id` | `TEXT` | Nullable to preserve current ingestion behavior |
+| `event_type` | `TEXT` | Not null |
+| `event_timestamp` | `TIMESTAMPTZ` | Nullable |
+| `received_at` | `TIMESTAMPTZ` | Not null |
+| `lat` | `DOUBLE PRECISION` | Nullable |
+| `lon` | `DOUBLE PRECISION` | Nullable |
+| `message_code` | `INTEGER` | Nullable |
+| `message_severity` | `TEXT` | Nullable |
+| `payload` | `JSONB` | Not null |
+
+Indexes support `(mower_id, event_timestamp)` and
+`(event_type, event_timestamp)` reads. Event deduplication preserves the current
+logical key of mower, event type, event timestamp, and payload. The unique
+index and conflict target must use identical null semantics so two events that
+have the same logical key are treated consistently even when a nullable key
+component is absent.
+
+`storeEvent` uses one `INSERT ... ON CONFLICT ... DO UPDATE` statement. A
+duplicate refreshes `received_at`, and both insert and update paths return the
+row ID atomically. JSONB equality makes logically equivalent JSON objects
+duplicates even if their object keys arrived in a different order.
+
+### `positions`
+
+| Column | Type | Constraints |
+| --- | --- | --- |
+| `id` | `BIGINT GENERATED BY DEFAULT AS IDENTITY` | Primary key |
+| `mower_id` | `TEXT` | Nullable to preserve current storage behavior |
+| `session_id` | `BIGINT` | Nullable |
+| `activity` | `TEXT` | Nullable |
+| `lat` | `DOUBLE PRECISION` | Nullable |
+| `lon` | `DOUBLE PRECISION` | Nullable |
+| `timestamp` | `TIMESTAMPTZ` | Nullable |
+| `event_id` | `BIGINT` | Nullable foreign key to `events(id)` with `ON DELETE CASCADE` |
+
+Indexes support `(mower_id, timestamp)` reads. A unique index suppresses
+duplicate positions using the existing logical key of mower, timestamp,
+latitude, and longitude. A partial unique index on non-null `event_id` ensures
+one position per source event.
+
+`storePosition` uses conflict handling rather than exception-driven control
+flow. A duplicate position is ignored, except that an existing row without an
+event link may be updated with the supplied `event_id`. It must never replace a
+different non-null event link.
+
+### Query compatibility
+
+All existing database operations remain available with async contracts:
+
+- Store or deduplicate an event and return its ID.
+- Store or deduplicate a position and attach its event ID.
+- Read ordered positions with optional mower and session filters.
+- Read recent mowing-session summaries and messages within each session.
+- Read the latest message, latest messages, and latest battery event.
+- Read mower IDs found in either table.
+
+Parameterized PostgreSQL placeholders replace SQLite placeholders. Query limits
+are validated and passed safely. Session summary calculations preserve their
+current meaning: only `MOWING` positions contribute to a session, sessions sort
+by latest timestamp, and duration is rounded to minutes in application code.
+
+## Migrations and schema validation
+
+Migrations live in a dedicated repository directory, have deterministic order,
+and are recorded in a migration metadata table. Commands are added for:
+
+- `npm run db:migrate` to apply all pending migrations.
+- `npm run db:migrate:status` to show applied and pending migrations.
+
+Normal application startup does not create or alter tables. Before starting
+the HTTP server or WebSocket, it must:
+
+1. Validate the database configuration.
+2. Establish a PostgreSQL connection within the configured connection timeout.
+3. Confirm that the migration metadata table exists and no migrations are
+   pending.
+
+Failure in any step terminates startup with a concise actionable message and a
+non-zero exit code. The message may identify the database host and database
+name only if doing so cannot expose credentials; it must never print the raw
+connection URL.
+
+## Runtime data flow
+
+### Event ingestion
+
+Incoming WebSocket payloads continue to be shaped by the existing event
+normalization logic. For a persistable event:
+
+1. Await `storeEvent` and capture its returned ID.
+2. For a position event, await `storePosition` with that event ID.
+3. Update in-memory mower state.
+4. Publish the existing server-sent event notification.
+
+Events from one replay are processed sequentially. Live WebSocket messages must
+also have a defined ordering mechanism so concurrent async callbacks cannot
+reorder activity/session changes and their following positions. A rejected
+event must not permanently block later events in that sequence.
+
+If PostgreSQL rejects or cannot persist an event at runtime, the error is logged
+with the operation and event type. The WebSocket remains connected and
+in-memory mower state may continue updating. Notifications may still describe
+the live state change, but they must not present a database event ID unless the
+insert succeeded. The application does not promise to replay data missed during
+a database outage.
+
+### HTTP reads
+
+`/api/positions` and `/api/status` become async handlers but keep their current
+successful response bodies and cache headers. Status-cache entries are populated
+only by completed queries; a failed or partial build is never cached.
+
+An unavailable database returns HTTP `503` with a stable JSON error body. Other
+unexpected read failures return HTTP `500`. Detailed database errors remain in
+server logs and are not exposed to clients.
+
+## Connection and shutdown behavior
+
+One shared pool serves all runtime queries. The pool uses bounded connection,
+idle, and query timeouts so failed database operations do not hang indefinitely.
+Transient broken connections are discarded by the client pool and subsequent
+queries may acquire healthy connections.
+
+The app tracks in-flight WebSocket event handlers. On `SIGINT` or `SIGTERM`, it:
+
+1. Stops reconnect scheduling and closes the Husqvarna WebSocket.
+2. Stops accepting new HTTP connections.
+3. Waits up to a documented timeout for in-flight event and HTTP work.
+4. Closes the PostgreSQL pool.
+5. Exits successfully when shutdown completes, or logs the timeout and exits
+   non-zero if work could not drain safely.
+
+Shutdown handlers must be idempotent so receiving a second signal cannot close
+the pool twice or start a second drain sequence.
+
+## Test strategy
+
+The Node test runner remains the test framework. Pure transformation tests do
+not require PostgreSQL. Database helpers and HTTP behavior are integration
+tested against PostgreSQL through `TEST_DATABASE_URL`.
+
+The test bootstrap creates a uniquely named schema for each test process, runs
+all migrations into that schema, configures the pool search path to use it, and
+drops it during teardown. The test database role therefore needs permission to
+create and drop schemas. Unique schema names prevent collisions between test
+files running concurrently.
+
+Integration coverage includes:
+
+- Applying the initial migration to an empty schema.
+- Detecting missing and pending migrations during startup validation.
+- Inserting an event and returning its identity.
+- Atomically deduplicating an event and refreshing `received_at`.
+- JSONB payload equality and timestamp normalization.
+- Position deduplication and safe event-link attachment.
+- Foreign-key and one-position-per-event constraints.
+- Every read helper, including filter ordering and query limits.
+- Session summary filtering, ordering, duration, and message inclusion.
+- Latest message, message list, battery parsing, and stored mower discovery.
+- Preservation of `/api/positions` and `/api/status` successful payload shapes.
+- HTTP `503` behavior for database unavailability and avoidance of partial
+  status-cache writes.
+- Ordered WebSocket/replay ingestion and continuation after a rejected event.
+- Graceful shutdown and pool drain behavior.
+
+`npm test` must fail before running destructive setup if `TEST_DATABASE_URL` is
+missing or resolves to the same normalized connection target as `DATABASE_URL`.
+
+## Docker and local operation
+
+A Compose file provides three services:
+
+- `postgres`: PostgreSQL 16, a named data volume, and a readiness health check.
+- `migrate`: a one-shot application image invocation that applies pending
+  migrations after PostgreSQL is healthy.
+- `app`: the existing application image, started only after PostgreSQL is
+  healthy and migration execution succeeds.
+
+The app image no longer creates an SQLite directory, and Compose no longer
+mounts `db/`. PostgreSQL credentials are supplied through environment variables
+or an ignored local environment file, with non-secret development defaults
+documented where appropriate. Restarting the Compose stack must retain data in
+the named PostgreSQL volume.
+
+Direct development against the already-running PostgreSQL instance uses the
+same workflow: create an empty application database and restricted application
+role, export `DATABASE_URL`, run `npm run db:migrate`, then run `npm start`.
+Installing PostgreSQL command-line tools on the host is useful for manual
+inspection but is not a runtime requirement for the Node application.
+
+## Documentation changes
+
+Update the README and supporting examples to:
+
+- Describe PostgreSQL rather than SQLite.
+- Document every database configuration variable and safe secret handling.
+- Show database/user creation for an existing local PostgreSQL server.
+- Show migration, migration-status, application, replay, and test commands.
+- Show Docker Compose startup, shutdown, logs, and persistent-volume behavior.
+- Replace `sqlite3` verification examples with PostgreSQL queries.
+- Provide manual `pg_dump` and `pg_restore` backup/restore examples.
+- Explain hosted PostgreSQL TLS configuration.
+- State explicitly that existing SQLite history is not migrated.
+
+Add `.env.example` with placeholders only. Generated environment files,
+database dumps, and PostgreSQL data directories remain ignored by Git.
+
+## Acceptance criteria
+
+The migration is complete when all of the following are true:
+
+- No runtime source imports or depends on `better-sqlite3`.
+- The app refuses to start without a valid, fully migrated PostgreSQL database.
+- A fresh database can be initialized only through the documented migration
+  command.
+- Live and replayed events populate `events` and `positions` with correct
+  deduplication and event linkage.
+- `/api/positions` and `/api/status` retain their current successful response
+  shapes and browser behavior.
+- Runtime database interruption does not crash or permanently stall WebSocket
+  processing; affected HTTP requests return the documented error response.
+- All unit and PostgreSQL integration tests pass.
+- Docker Compose starts a healthy migrated stack and preserves data across a
+  stop/start cycle.
+- Direct startup against an existing or hosted PostgreSQL instance works from
+  the documented `DATABASE_URL` workflow.
+- Graceful shutdown drains in-flight work and closes the pool.
+- Documentation contains no remaining instructions to use SQLite for runtime
+  storage.
