@@ -10,12 +10,13 @@ let pingInterval = null;
 let reconnectTimer = null;
 let reconnectAttempts = 0;
 let wss = null;
+let ingestionChain = Promise.resolve();
 
 function publishClientChange({ type, mowerId, eventId, timestamp, changed }) {
   clientEventBus.publish({ type, mowerId, eventId, timestamp, changed });
 }
 
-export function handleIncomingEvent(data) {
+export async function handleIncomingEvent(data) {
   if (!data.length) return;
 
   try {
@@ -37,7 +38,7 @@ export function handleIncomingEvent(data) {
     if (shapedEvent) {
       eventTimestampIso = shapedEvent.eventTimestamp;
       try {
-        eventId = storeEvent(shapedEvent);
+        eventId = await storeEvent(shapedEvent);
       } catch (err) {
         console.error('Failed to persist event:', err);
       }
@@ -98,7 +99,7 @@ export function handleIncomingEvent(data) {
         const sessionId = currentState?.sessionId ?? currentState?.timestamp ?? Date.now();
         const state = currentState?.activity ?? 'UNKNOWN';
 
-        storePosition({
+        await storePosition({
           mowerId,
           sessionId,
           state,
@@ -193,6 +194,19 @@ export function handleIncomingEvent(data) {
   }
 }
 
+export function enqueueIncomingEvent(data) {
+  ingestionChain = ingestionChain
+    .then(() => handleIncomingEvent(data))
+    .catch((err) => {
+      console.error('Queued WebSocket event error:', err);
+    });
+  return ingestionChain;
+}
+
+export function drainIncomingEvents() {
+  return ingestionChain;
+}
+
 export async function startWebSocket(apiKey, apiSecret) {
   console.log('🔐 Connecting...');
 
@@ -209,7 +223,7 @@ export async function startWebSocket(apiKey, apiSecret) {
     }
   });
 
-  wss.on('message', handleIncomingEvent);
+  wss.on('message', enqueueIncomingEvent);
   wss.on('close', async (code, reason) => {
     console.warn(`🔓 Disconnected: ${code} - ${reason}`);
     if (pingInterval) {

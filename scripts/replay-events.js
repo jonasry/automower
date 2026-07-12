@@ -316,7 +316,7 @@ async function main() {
     }
 
     const payload = Buffer.from(JSON.stringify(event));
-    handleIncomingEvent(payload);
+    await handleIncomingEvent(payload);
 
     const type = event.type || (event.ready ? 'connection-event' : 'unknown');
     counts.set(type, (counts.get(type) ?? 0) + 1);
@@ -334,9 +334,9 @@ main()
     console.error('Replay failed:', err);
     process.exitCode = 1;
   })
-  .finally(() => {
+  .finally(async () => {
     try {
-      closeDb();
+      await closeDb();
     } catch {
       // ignore close errors
     }
