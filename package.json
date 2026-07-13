@@ -17,6 +17,7 @@
   "dependencies": {
     "dotenv": "^17.4.2",
     "express": "^5.1.0",
+    "fast-xml-parser": "^5.9.3",
     "node-pg-migrate": "7.4.0",
     "pg": "^8.22.0",
     "ws": "^8.18.3"

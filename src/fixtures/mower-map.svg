@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" map-creation-datetime="2025-07-20 20:12:21" map-version="2.1" post-processing-commit="abc123" post-processing-branch="main">
+  <polyline id="lona_cs" stroke="yellow" points="-1000,500 0,-1000" />
+  <polygon id="main_area_0" title="Working area 0" stroke="green" fill="green" points="-2000,-2000 3000,-2000 3000,4000 -2000,4000" />
+  <polygon id="island_1" title="Island 1" stroke="red" fill="red" points="0,0 500,0 500,500 0,500" />
+  <polyline id="guide_1" stroke="blue" stroke-width="500" points="-1000,500 0,-1000 2000,-1500" />
+</svg>
