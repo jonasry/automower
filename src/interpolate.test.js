@@ -8,6 +8,17 @@ const mowerId = 'test-mower';
 const previousSessionId = 1;
 const mowingSessionId = 2;
 
+function todayAt(hour, minute) {
+  const now = new Date();
+  return new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate(),
+    hour,
+    minute
+  ).toISOString();
+}
+
 const rows = [
   {
     mower_id: mowerId,
@@ -15,7 +26,7 @@ const rows = [
     activity: 'MOWING',
     lat: 55.0,
     lon: 13.0,
-    timestamp: '2026-07-12T08:00:00.000Z'
+    timestamp: todayAt(8, 0)
   },
   {
     mower_id: mowerId,
@@ -23,7 +34,7 @@ const rows = [
     activity: 'MOWING',
     lat: 55.0,
     lon: 13.00002,
-    timestamp: '2026-07-12T08:01:00.000Z'
+    timestamp: todayAt(8, 1)
   },
   {
     mower_id: mowerId,
@@ -31,7 +42,7 @@ const rows = [
     activity: 'MOWING',
     lat: 55.0001,
     lon: 13.0001,
-    timestamp: '2026-07-12T09:00:00.000Z'
+    timestamp: todayAt(9, 0)
   },
   {
     mower_id: mowerId,
@@ -39,7 +50,7 @@ const rows = [
     activity: 'MOWING',
     lat: 55.0001,
     lon: 13.00012,
-    timestamp: '2026-07-12T09:01:00.000Z'
+    timestamp: todayAt(9, 1)
   }
 ];
 
@@ -59,11 +70,11 @@ test('loads PostgreSQL positions before interpolating them', async () => {
   const mowerId = 'interpolation-db-mower';
   await storePosition({
     mowerId, sessionId: 50, state: 'MOWING', lat: 55, lon: 13,
-    timestamp: '2026-07-12T16:00:00.000Z', eventId: null
+    timestamp: todayAt(16, 0), eventId: null
   });
   await storePosition({
     mowerId, sessionId: 50, state: 'MOWING', lat: 55, lon: 13.00002,
-    timestamp: '2026-07-12T16:01:00.000Z', eventId: null
+    timestamp: todayAt(16, 1), eventId: null
   });
 
   const result = await getInterpolatedPositions({ mowerId, sessionId: 50 });
