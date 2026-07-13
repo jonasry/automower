@@ -8,8 +8,11 @@ import {
   saveHeatmapSettings
 } from './heatmapSettings.js';
 import {
+  DEFAULT_MAP_OVERLAY_SETTINGS,
   getMowerTrim,
-  loadMapOverlaySettings
+  loadMapOverlaySettings,
+  saveMapOverlaySettings,
+  setMowerTrim
 } from './mapOverlaySettings.js';
 import { projectMowerMap } from './mapProjection.js';
 
@@ -39,6 +42,7 @@ let boundsKey = null;
 let suppressSessionChange = false;
 let heatmapSettings = loadHeatmapSettings();
 let draftHeatmapSettings = null;
+let draftMapOverlaySettings = null;
 let isConfigMode = false;
 let latestHeat = [];
 let latestFitKey = null;
@@ -69,6 +73,11 @@ const heatColorHigh = document.getElementById('heatColorHigh');
 const heatColorPeak = document.getElementById('heatColorPeak');
 const softnessInput = document.getElementById('softnessInput');
 const strengthInput = document.getElementById('strengthInput');
+const mapOverlayStatus = document.getElementById('mapOverlayStatus');
+const overlayEastInput = document.getElementById('overlayEastInput');
+const overlayNorthInput = document.getElementById('overlayNorthInput');
+const overlayEastValue = document.getElementById('overlayEastValue');
+const overlayNorthValue = document.getElementById('overlayNorthValue');
 const resetSettingsButton = document.getElementById('resetSettingsButton');
 const cancelSettingsButton = document.getElementById('cancelSettingsButton');
 const saveSettingsButton = document.getElementById('saveSettingsButton');
@@ -196,6 +205,35 @@ function readDraftFromControls() {
   });
 }
 
+function signedMetres(value) {
+  const normalized = Math.abs(value) < 0.05 ? 0 : value;
+  return `${normalized > 0 ? '+' : ''}${normalized.toFixed(1)} m`;
+}
+
+function renderOverlayControls(settings) {
+  const trim = getMowerTrim(settings, selectedMowerId);
+  overlayEastInput.value = String(trim.eastMetres);
+  overlayNorthInput.value = String(trim.northMetres);
+  overlayEastInput.disabled = !selectedMowerId;
+  overlayNorthInput.disabled = !selectedMowerId;
+  overlayEastValue.value = signedMetres(trim.eastMetres);
+  overlayNorthValue.value = signedMetres(trim.northMetres);
+  mapOverlayStatus.textContent = mapOverlayMessage;
+}
+
+function readOverlayDraftFromControls(settings) {
+  if (!selectedMowerId) return settings;
+  return setMowerTrim(settings, selectedMowerId, {
+    eastMetres: Number(overlayEastInput.value),
+    northMetres: Number(overlayNorthInput.value)
+  });
+}
+
+function setMapOverlayMessage(message) {
+  mapOverlayMessage = message;
+  if (isConfigMode) mapOverlayStatus.textContent = message;
+}
+
 function setPanelMode(mode) {
   isConfigMode = mode === 'config';
   statusPanelContent.hidden = isConfigMode;
@@ -204,38 +242,63 @@ function setPanelMode(mode) {
 
 function enterConfigureMode() {
   draftHeatmapSettings = structuredClone(heatmapSettings);
+  draftMapOverlaySettings = structuredClone(mapOverlaySettings);
   setSettingsError('');
   renderSettingsControls(draftHeatmapSettings);
+  renderOverlayControls(draftMapOverlaySettings);
   setPanelMode('config');
   heatColorLow.focus();
 }
 
 function previewDraftSettings() {
   draftHeatmapSettings = readDraftFromControls();
+  draftMapOverlaySettings = readOverlayDraftFromControls(
+    draftMapOverlaySettings
+  );
   renderSettingsControls(draftHeatmapSettings);
+  renderOverlayControls(draftMapOverlaySettings);
   redrawHeatmapPreview(draftHeatmapSettings);
+  redrawMapOverlayPreview(draftMapOverlaySettings);
 }
 
 function cancelConfigureMode() {
   draftHeatmapSettings = null;
+  draftMapOverlaySettings = null;
   setSettingsError('');
   redrawHeatmapPreview(heatmapSettings);
+  redrawMapOverlayPreview(mapOverlaySettings);
   setPanelMode('status');
   settingsButton.focus();
 }
 
 function resetDraftSettings() {
   draftHeatmapSettings = structuredClone(DEFAULT_HEATMAP_SETTINGS);
+  const overlaySettings = draftMapOverlaySettings ?? DEFAULT_MAP_OVERLAY_SETTINGS;
+  draftMapOverlaySettings = selectedMowerId
+    ? setMowerTrim(
+        overlaySettings,
+        selectedMowerId,
+        { eastMetres: 0, northMetres: 0 }
+      )
+    : structuredClone(overlaySettings);
   renderSettingsControls(draftHeatmapSettings);
+  renderOverlayControls(draftMapOverlaySettings);
   redrawHeatmapPreview(draftHeatmapSettings);
+  redrawMapOverlayPreview(draftMapOverlaySettings);
 }
 
 function saveConfigureMode() {
   try {
     heatmapSettings = saveHeatmapSettings(undefined, readDraftFromControls());
+    mapOverlaySettings = saveMapOverlaySettings(
+      undefined,
+      readOverlayDraftFromControls(draftMapOverlaySettings)
+    );
     draftHeatmapSettings = null;
+    draftMapOverlaySettings = null;
     setSettingsError('');
     redrawHeatmapPreview(heatmapSettings);
+    redrawMapOverlayPreview(mapOverlaySettings);
     setPanelMode('status');
     settingsButton.focus();
   } catch (err) {
@@ -674,7 +737,7 @@ async function loadMapOverlay() {
   const mowerId = selectedMowerId;
   if (!mowerId) {
     clearMapOverlay();
-    mapOverlayMessage = 'Select a mower to load its boundary map.';
+    setMapOverlayMessage('Select a mower to load its boundary map.');
     return;
   }
 
@@ -686,24 +749,31 @@ async function loadMapOverlay() {
     if (requestId !== latestMapRequestId || mowerId !== selectedMowerId) return;
     if (!response.ok) {
       clearMapOverlay();
-      mapOverlayMessage = overlayMessageFor(payload?.error?.code);
+      setMapOverlayMessage(overlayMessageFor(payload?.error?.code));
       return;
     }
     if (payload.status === 'anchor-unavailable') {
       clearMapOverlay();
-      mapOverlayMessage = 'Boundary map is waiting for a completed return-home position.';
+      setMapOverlayMessage(
+        'Boundary map is waiting for a completed return-home position.'
+      );
       return;
     }
 
-    renderMapOverlay(payload);
-    mapOverlayMessage = payload.stale
+    renderMapOverlay(
+      payload,
+      isConfigMode && draftMapOverlaySettings
+        ? draftMapOverlaySettings
+        : mapOverlaySettings
+    );
+    setMapOverlayMessage(payload.stale
       ? 'Showing the last available boundary map.'
-      : '';
+      : '');
   } catch (error) {
     console.error(error);
     if (requestId !== latestMapRequestId || mowerId !== selectedMowerId) return;
     clearMapOverlay();
-    mapOverlayMessage = 'Boundary map is temporarily unavailable.';
+    setMapOverlayMessage('Boundary map is temporarily unavailable.');
   }
 }
 
@@ -756,6 +826,10 @@ mowerPicker.addEventListener('change', () => {
   clearMapOverlay();
   selectedMowerId = mowerPicker.value;
   selectedSessionId = 'latest';
+  if (isConfigMode) {
+    draftMapOverlaySettings = structuredClone(mapOverlaySettings);
+    renderOverlayControls(draftMapOverlaySettings);
+  }
   resetMapFit();
   const context = renderStatus();
   Promise.all([loadData(context), loadMapOverlay()]);
@@ -780,7 +854,9 @@ saveSettingsButton.addEventListener('click', saveConfigureMode);
   heatColorHigh,
   heatColorPeak,
   softnessInput,
-  strengthInput
+  strengthInput,
+  overlayEastInput,
+  overlayNorthInput
 ].forEach((input) => {
   input.addEventListener('input', previewDraftSettings);
 });

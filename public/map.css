@@ -318,6 +318,24 @@ select {
   accent-color: var(--accent);
 }
 
+.boundary-settings output {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+.boundary-settings__north-label {
+  margin-top: 18px;
+}
+
+.overlay-status {
+  min-height: 1.4em;
+  margin: 0 0 12px;
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
 .panel-actions {
   display: flex;
   flex-wrap: wrap;

@@ -44,7 +44,7 @@
               <p class="section-kicker">Current session</p>
               <h1 id="sessionTitle">Latest garden run</h1>
             </div>
-            <button id="settingsButton" class="icon-button" type="button" aria-label="Configure heatmap">Settings</button>
+            <button id="settingsButton" class="icon-button" type="button" aria-label="Configure map">Settings</button>
           </div>
 
           <p id="sessionSummary" class="session-summary">Showing recent path and coverage heat from recorded mower positions.</p>
@@ -89,7 +89,7 @@
         <div id="configPanelContent" class="panel-mode config-panel" hidden>
           <div class="panel-header">
             <div>
-              <p class="section-kicker">Heatmap setup</p>
+              <p class="section-kicker">Map setup</p>
               <h1>Configure map</h1>
             </div>
           </div>
@@ -134,6 +134,25 @@
               <span>Strong</span>
             </label>
             <input id="strengthInput" class="semantic-range" type="range" min="0" max="1" step="0.01" />
+          </div>
+
+          <div class="panel-section boundary-settings" aria-labelledby="boundarySettingsTitle">
+            <p id="boundarySettingsTitle" class="field-label">Boundary overlay</p>
+            <p id="mapOverlayStatus" class="overlay-status" aria-live="polite"></p>
+
+            <label class="range-label" for="overlayEastInput">
+              <span>West</span>
+              <output id="overlayEastValue" for="overlayEastInput">0.0 m</output>
+              <span>East</span>
+            </label>
+            <input id="overlayEastInput" class="semantic-range" type="range" min="-20" max="20" step="0.1" value="0" />
+
+            <label class="range-label boundary-settings__north-label" for="overlayNorthInput">
+              <span>South</span>
+              <output id="overlayNorthValue" for="overlayNorthInput">0.0 m</output>
+              <span>North</span>
+            </label>
+            <input id="overlayNorthInput" class="semantic-range" type="range" min="-20" max="20" step="0.1" value="0" />
           </div>
 
           <div class="panel-actions">
