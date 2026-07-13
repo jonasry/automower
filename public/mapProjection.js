@@ -12,7 +12,7 @@ export function svgPointToLatLng(point, coordinateSystem, anchor, trim) {
   if (
     coordinateSystem?.unitsPerMetre !== 1000 ||
     coordinateSystem?.xAxis !== 'east' ||
-    coordinateSystem?.yAxis !== 'south' ||
+    coordinateSystem?.yAxis !== 'north' ||
     coordinateSystem?.rotationDegrees !== 0
   ) {
     throw new TypeError('Unsupported mower map coordinate system');
@@ -31,7 +31,7 @@ export function svgPointToLatLng(point, coordinateSystem, anchor, trim) {
   }
 
   const eastMetres = (x - originX) / 1000 + eastTrim;
-  const northMetres = (originY - y) / 1000 + northTrim;
+  const northMetres = (y - originY) / 1000 + northTrim;
   const latitude = anchorLat +
     northMetres / EARTH_RADIUS_METRES * RADIANS_TO_DEGREES;
   const longitude = anchorLon +

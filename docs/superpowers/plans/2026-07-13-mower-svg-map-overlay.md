@@ -12,7 +12,7 @@
 
 - Follow the approved spec at `docs/superpowers/specs/2026-07-13-mower-svg-map-overlay-design.md`.
 - Interpret 1,000 SVG coordinate units as one metre.
-- Treat SVG X as east-positive and SVG Y as south-positive; do not estimate or expose rotation or scale.
+- Treat SVG X as east-positive and generated-map Y as north-positive; do not estimate or expose rotation or scale.
 - Derive the SVG station origin from the first point of `lona_cs`.
 - Use the final point of the latest eligible `GOING_HOME` session as the GPS anchor; exclude the active `GOING_HOME` session ID.
 - Never send Husqvarna credentials, access tokens, upstream response bodies, or raw SVG markup to the browser.
@@ -849,7 +849,7 @@ export function createMowerMapHandler({
         coordinateSystem: {
           unitsPerMetre: 1000,
           xAxis: 'east',
-          yAxis: 'south',
+          yAxis: 'north',
           rotationDegrees: 0,
           stationOrigin: map.stationOrigin
         },
@@ -1013,19 +1013,19 @@ import { projectMowerMap, svgPointToLatLng } from './mapProjection.js';
 
 const coordinateSystem = {
   unitsPerMetre: 1000,
-  xAxis: 'east', yAxis: 'south', rotationDegrees: 0,
+  xAxis: 'east', yAxis: 'north', rotationDegrees: 0,
   stationOrigin: { x: -1000, y: 500 }
 };
 const anchor = { lat: 55.7, lon: 13.2 };
 
-test('maps origin to anchor and applies east-positive, south-positive millimetres', () => {
+test('maps origin to anchor and applies east-positive, north-positive millimetres', () => {
   const origin = svgPointToLatLng({ x: -1000, y: 500 }, coordinateSystem, anchor, { eastMetres: 0, northMetres: 0 });
   const east = svgPointToLatLng({ x: 0, y: 500 }, coordinateSystem, anchor, { eastMetres: 0, northMetres: 0 });
-  const south = svgPointToLatLng({ x: -1000, y: 1500 }, coordinateSystem, anchor, { eastMetres: 0, northMetres: 0 });
+  const north = svgPointToLatLng({ x: -1000, y: 1500 }, coordinateSystem, anchor, { eastMetres: 0, northMetres: 0 });
   assert.deepEqual(origin, [55.7, 13.2]);
   assert.ok(east[1] > origin[1]);
   assert.ok(Math.abs(east[0] - origin[0]) < 1e-12);
-  assert.ok(south[0] < origin[0]);
+  assert.ok(north[0] > origin[0]);
 });
 
 test('applies positive trim north and east without mutating source geometry', () => {
@@ -1137,7 +1137,7 @@ export function svgPointToLatLng(point, coordinateSystem, anchor, trim) {
   if (
     coordinateSystem?.unitsPerMetre !== 1000 ||
     coordinateSystem?.xAxis !== 'east' ||
-    coordinateSystem?.yAxis !== 'south' ||
+    coordinateSystem?.yAxis !== 'north' ||
     coordinateSystem?.rotationDegrees !== 0
   ) throw new TypeError('Unsupported mower map coordinate system');
 
@@ -1152,7 +1152,7 @@ export function svgPointToLatLng(point, coordinateSystem, anchor, trim) {
   if (Math.abs(anchorLat) >= 90 || Math.abs(anchorLon) > 180) throw new RangeError('Invalid anchor coordinate');
 
   const eastMetres = (x - originX) / 1000 + eastTrim;
-  const northMetres = (originY - y) / 1000 + northTrim;
+  const northMetres = (y - originY) / 1000 + northTrim;
   const latitude = anchorLat + northMetres / EARTH_RADIUS_METRES * radiansToDegrees;
   const longitude = anchorLon + eastMetres /
     (EARTH_RADIUS_METRES * Math.cos(anchorLat / radiansToDegrees)) * radiansToDegrees;
@@ -1632,7 +1632,7 @@ to the browser. The overlay uses the final recorded position from the latest
 completed `GOING_HOME` session as its charging-station anchor.
 
 The current conversion assumes 1,000 SVG units per metre, SVG X pointing east,
-SVG Y pointing south, and zero rotation. Working areas, islands, guides, and the
+SVG Y pointing north, and zero rotation. Working areas, islands, guides, and the
 charging-station reference are drawn as outlines. The Settings panel stores
 per-mower east/west and north/south trim in browser local storage.
 
@@ -1679,7 +1679,7 @@ Open `http://localhost:3000/map.html` and verify:
 1. A mower with a generated SVG and completed `GOING_HOME` session shows green working-area, red island, blue guide, and amber station outlines.
 2. No region is filled and no black shape closes the guide line.
 3. The overlay follows the existing map during pan and zoom and remains below mower/message markers.
-4. North/south orientation matches the base map; SVG positive Y appears south.
+4. North/south orientation matches the base map; positive generated-map Y appears north.
 5. The reference SVG spans roughly 51 by 47 metres relative to GPS telemetry.
 6. East trim moves the overlay east, north trim moves it north, and both preview immediately.
 7. Cancel restores saved values, Reset previews zero values, and Save survives reload.

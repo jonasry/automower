@@ -55,7 +55,7 @@ to the browser. The overlay uses the final recorded position from the latest
 completed `GOING_HOME` session as its charging-station anchor.
 
 The current conversion assumes 1,000 SVG units per metre, SVG X pointing east,
-SVG Y pointing south, and zero rotation. Working areas, islands, guides, and the
+SVG Y pointing north, and zero rotation. Working areas, islands, guides, and the
 charging-station reference are drawn as outlines. The Settings panel stores
 per-mower east/west and north/south trim in browser local storage.
 

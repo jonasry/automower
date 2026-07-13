@@ -15,8 +15,8 @@ This first version deliberately assumes a fixed scale and orientation:
 
 - 1,000 SVG coordinate units equal one metre.
 - SVG X increases eastward.
-- SVG Y increases southward and must be inverted for north-positive map
-  coordinates.
+- Generated-map Y increases northward. A standalone SVG viewer displays its
+  down-positive screen axis, so the raw document appears north/south mirrored.
 - The SVG is not rotated relative to the geographic map.
 - Users may adjust translation only; scale and rotation are not configurable.
 
@@ -226,7 +226,7 @@ A ready response has this conceptual shape:
   "coordinateSystem": {
     "unitsPerMetre": 1000,
     "xAxis": "east",
-    "yAxis": "south",
+    "yAxis": "north",
     "rotationDegrees": 0,
     "stationOrigin": { "x": -1316, "y": 959 }
   },
@@ -285,12 +285,13 @@ mower's saved trim:
 
 ```text
 eastMetres  = (x - originX) / 1000 + eastTrimMetres
-northMetres = (originY - y) / 1000 + northTrimMetres
+northMetres = (y - originY) / 1000 + northTrimMetres
 ```
 
 Positive east trim moves the entire overlay east. Positive north trim moves it
-north. The reversed Y subtraction converts the SVG's down-positive Y axis into
-north-positive local metres.
+north. The generated geometry is already north-positive; using source Y as the
+north offset corrects the down-positive orientation seen in standalone SVG
+rendering.
 
 At the small extent of this map, the browser uses a local tangent-plane
 approximation around the station anchor:
@@ -470,7 +471,7 @@ Manual browser verification covers:
 - outline-only working area, island, guide, and station rendering
 - layer order relative to heatmap and markers
 - absence of the accidental black guide fill
-- correct north/south inversion
+- correct north/south orientation relative to standalone SVG rendering
 - live east/west and north/south trim preview
 - Save, Cancel, Reset, and per-mower isolation
 - stable line appearance while zooming
@@ -485,7 +486,8 @@ Manual browser verification covers:
   inferred charging station.
 - The reference SVG is interpreted as approximately 51 by 47 metres, not
   kilometres.
-- SVG X maps east and SVG Y is inverted so positive source Y maps south.
+- SVG X maps east and positive generated-map Y maps north, correcting the
+  north/south mirroring seen when the document is rendered as a standalone SVG.
 - Working areas, islands, guides, and `lona_cs` remain separate styled Leaflet
   vector layers with no polygon or polyline fill.
 - An active `GOING_HOME` session never moves the overlay anchor.

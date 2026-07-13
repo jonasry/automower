@@ -44,7 +44,7 @@ export function createMowerMapHandler({
         coordinateSystem: {
           unitsPerMetre: 1000,
           xAxis: 'east',
-          yAxis: 'south',
+          yAxis: 'north',
           rotationDegrees: 0,
           stationOrigin: map.stationOrigin
         },

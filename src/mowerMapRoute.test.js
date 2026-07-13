@@ -72,6 +72,7 @@ test('returns ready geometry and excludes the active going-home session', async 
     { x: -1000, y: 500 }
   );
   assert.equal(res.body.coordinateSystem.unitsPerMetre, 1000);
+  assert.equal(res.body.coordinateSystem.yAxis, 'north');
 });
 
 test('returns geometry with anchor-unavailable status', async () => {
