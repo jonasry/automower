@@ -3,14 +3,37 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { getInterpolatedPositions } from './interpolate.js';
 import { buildPositionsPayload } from './positionsPayload.js';
-import { mowerStates, updateMowerState } from './state.js';
-import { getLatestBatteryReading, getLatestMessage, getLatestMessages, getSessionSummaries, getStoredMowerIds } from './db.js';
+import { getMowerState, mowerStates, updateMowerState } from './state.js';
+import {
+  getChargingStationAnchor,
+  getLatestBatteryReading,
+  getLatestMessage,
+  getLatestMessages,
+  getSessionSummaries,
+  getStoredMowerIds
+} from './db.js';
 import { messageDescriptions } from './amcmessages.js';
 import { clientEventBus } from './clientEvents.js';
+import { createMowerMapHandler } from './mowerMapRoute.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 let statusCache = { data: null, expires: 0 };
+let mowerMapClient = null;
+
+export function configureMowerMapClient(client) {
+  if (!client || typeof client.getGeometry !== 'function') {
+    throw new TypeError('Mower map client must provide getGeometry');
+  }
+  mowerMapClient = client;
+}
+
+async function getKnownMowerIds() {
+  return Array.from(new Set([
+    ...mowerStates.keys(),
+    ...(await getStoredMowerIds())
+  ]));
+}
 
 app.disable('x-powered-by');
 
@@ -21,6 +44,18 @@ clientEventBus.onPublish(() => {
 app.get('/api/events', (req, res) => {
   clientEventBus.subscribe(res);
 });
+
+app.get('/api/mowers/:mowerId/map', createMowerMapHandler({
+  getKnownMowerIds,
+  getMowerState,
+  getGeometry: (mowerId) => {
+    if (!mowerMapClient) {
+      throw new Error('Mower map client is not configured');
+    }
+    return mowerMapClient.getGeometry(mowerId);
+  },
+  getAnchor: getChargingStationAnchor
+}));
 
 app.use(express.static(path.join(__dirname, '../public')));
 

@@ -1,10 +1,11 @@
-import { startHttpServer } from './server.js';
+import { configureMowerMapClient, startHttpServer } from './server.js';
 import { drainIncomingEvents, startWebSocket, stopWebSocket } from './amconnect.js';
 import { updateMowerState } from './state.js';
 import { getToken, refreshToken, loadCredentials } from './auth.js';
 import { closeDb } from './db.js';
 import { assertDatabaseReady } from './dbMigrations.js';
 import { createShutdown, startRuntime } from './appLifecycle.js';
+import { createMowerMapClient } from './mowerMapClient.js';
 
 async function getMowerData(accessToken, apiKey) {
   const response = await fetch('https://api.amc.husqvarna.dev/v1/mowers', {
@@ -77,6 +78,13 @@ async function loadMowerState(token, apiKey, apiSecret) {
     console.error('🚷 Missing API credentials.');
     process.exit(1);
   }
+
+  configureMowerMapClient(createMowerMapClient({
+    apiKey,
+    apiSecret,
+    getToken,
+    refreshToken
+  }));
 
   let token = await getToken(apiKey, apiSecret);
 
