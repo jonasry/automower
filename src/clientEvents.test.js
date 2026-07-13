@@ -73,3 +73,21 @@ test('normalizes unknown changes to an empty changed list', () => {
 
   assert.match(res.chunks.join(''), /"changed":\[\]/);
 });
+
+test('close ends active event streams and removes every subscriber', () => {
+  const bus = createClientEventBus({ keepAliveMs: 0 });
+  const first = new FakeResponse();
+  const second = new FakeResponse();
+  first.ended = false;
+  second.ended = false;
+  first.end = () => { first.ended = true; first.emit('close'); };
+  second.end = () => { second.ended = true; second.emit('close'); };
+
+  bus.subscribe(first);
+  bus.subscribe(second);
+  bus.close();
+
+  assert.equal(first.ended, true);
+  assert.equal(second.ended, true);
+  assert.equal(bus.subscriberCount, 0);
+});

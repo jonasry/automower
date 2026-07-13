@@ -17,12 +17,13 @@ export function createClientEventBus({ keepAliveMs = 25000, now = () => new Date
     res.flushHeaders?.();
     res.write(': connected\n\n');
 
-    const subscriber = { res, keepAliveTimer: null };
+    const subscriber = { res, keepAliveTimer: null, cleanup: null };
 
     function cleanup() {
       if (subscriber.keepAliveTimer) clearInterval(subscriber.keepAliveTimer);
       subscribers.delete(subscriber);
     }
+    subscriber.cleanup = cleanup;
 
     if (keepAliveMs > 0) {
       subscriber.keepAliveTimer = setInterval(() => {
@@ -69,10 +70,20 @@ export function createClientEventBus({ keepAliveMs = 25000, now = () => new Date
     return () => publishListeners.delete(listener);
   }
 
+  function close() {
+    for (const subscriber of Array.from(subscribers)) {
+      subscriber.cleanup();
+      try {
+        subscriber.res.end();
+      } catch {}
+    }
+  }
+
   return {
     subscribe,
     publish,
     onPublish,
+    close,
     get subscriberCount() {
       return subscribers.size;
     }
