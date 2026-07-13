@@ -90,6 +90,26 @@ test('returns geometry with anchor-unavailable status', async () => {
   assert.equal(res.body.anchor, null);
 });
 
+test('suppresses the anchor when startup finds an active return-home trip', async () => {
+  const handler = createMowerMapHandler({
+    getKnownMowerIds: async () => ['mower-1'],
+    getMowerState: () => ({
+      activity: 'GOING_HOME',
+      sessionId: 42,
+      suppressMapAnchor: true
+    }),
+    getGeometry: async () => geometryResult,
+    getAnchor: async () => assert.fail('suppressed anchor must not be queried')
+  });
+  const res = fakeResponse();
+
+  await handler({ params: { mowerId: 'mower-1' } }, res, assert.fail);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.status, 'anchor-unavailable');
+  assert.equal(res.body.anchor, null);
+});
+
 test('returns safe error codes for unknown, missing, failed, and invalid maps', async () => {
   const cases = [
     { known: [], error: null, status: 404, code: 'UNKNOWN_MOWER' },

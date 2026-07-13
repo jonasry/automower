@@ -7,7 +7,6 @@ import { assertDatabaseReady } from './dbMigrations.js';
 import {
   getChargingStationAnchor,
   getLatestBatteryReading,
-  getLatestPositionContext,
   getPositions,
   getSessionSummaries,
   getStoredMowerIds,
@@ -275,33 +274,4 @@ test('returns null when only the excluded going-home session is available', asyn
     await getChargingStationAnchor(mowerId, { excludeSessionId: 400 }),
     null
   );
-});
-
-test('returns the latest persisted position context for startup session hydration', async () => {
-  const mowerId = `mower-startup-session-${Date.now()}`;
-  await storePosition({
-    mowerId,
-    sessionId: 500,
-    state: 'MOWING',
-    lat: 55.5,
-    lon: 13.5,
-    timestamp: '2026-07-13T09:00:00.000Z',
-    eventId: null
-  });
-  await storePosition({
-    mowerId,
-    sessionId: 600,
-    state: 'GOING_HOME',
-    lat: 55.6,
-    lon: 13.6,
-    timestamp: '2026-07-13T10:00:00.000Z',
-    eventId: null
-  });
-
-  assert.deepEqual(await getLatestPositionContext(mowerId), {
-    activity: 'GOING_HOME',
-    sessionId: 600,
-    timestamp: '2026-07-13T10:00:00.000Z'
-  });
-  assert.equal(await getLatestPositionContext('missing-mower'), null);
 });

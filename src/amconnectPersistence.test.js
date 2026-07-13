@@ -3,12 +3,16 @@ import assert from 'node:assert/strict';
 
 import { drainIncomingEvents, enqueueIncomingEvent } from './amconnect.js';
 import { getPositions } from './db.js';
-import { mowerStates } from './state.js';
+import { mowerStates, updateMowerState } from './state.js';
 
 test('serializes activity and position persistence in arrival order', async () => {
   const mowerId = 'ordered-ingestion-mower';
   const activityTimestamp = '2026-07-12T17:00:00.000Z';
   mowerStates.clear();
+  updateMowerState(mowerId, {
+    activity: 'CHARGING',
+    suppressMapAnchor: true
+  });
 
   enqueueIncomingEvent(Buffer.from(JSON.stringify({
     id: mowerId,
@@ -33,4 +37,5 @@ test('serializes activity and position persistence in arrival order', async () =
   assert.equal(rows.length, 1);
   assert.equal(rows[0].session_id, Date.parse(activityTimestamp));
   assert.equal(mowerStates.get(mowerId).lastPosition.eventId != null, true);
+  assert.equal(mowerStates.get(mowerId).suppressMapAnchor, false);
 });

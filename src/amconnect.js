@@ -83,7 +83,8 @@ export async function handleIncomingEvent(data, { persist = true } = {}) {
             sessionId: Number.isNaN(activityTimestampMs) ? Date.now() : activityTimestampMs,
             lastActivityAt: activityTimestampIso,
             lastEventAt: lastEventTimestamp,
-            isCharging: activity === 'CHARGING'
+            isCharging: activity === 'CHARGING',
+            suppressMapAnchor: false
           });
           publishClientChange({
             type,

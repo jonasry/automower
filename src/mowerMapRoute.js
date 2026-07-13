@@ -28,7 +28,9 @@ export function createMowerMapHandler({
         : null;
       const [map, anchor] = await Promise.all([
         getGeometry(mowerId),
-        getAnchor(mowerId, { excludeSessionId })
+        state?.suppressMapAnchor
+          ? Promise.resolve(null)
+          : getAnchor(mowerId, { excludeSessionId })
       ]);
 
       res.set('Cache-Control', 'private, max-age=15');
