@@ -7,16 +7,28 @@ import {
   normalizeHeatmapSettings,
   saveHeatmapSettings
 } from './heatmapSettings.js';
+import {
+  getMowerTrim,
+  loadMapOverlaySettings
+} from './mapOverlaySettings.js';
+import { projectMowerMap } from './mapProjection.js';
 
 const REFRESH_FALLBACK_MS = 30000;
 
 const map = L.map('map', {
   zoomControl: true
 }).setView([55.7, 13.2], 17);
+map.createPane('mowerMapPane');
+map.getPane('mowerMapPane').style.zIndex = '425';
 
 let heatLayer = null;
 let recentLayer = null;
 let messageLayer = null;
+let mapOverlayLayer = null;
+let latestMapPayload = null;
+let latestMapRequestId = 0;
+let mapOverlayMessage = '';
+let mapOverlaySettings = loadMapOverlaySettings();
 let activeRequests = 0;
 let latestRequestId = 0;
 let hasRenderedData = false;
@@ -420,6 +432,60 @@ function clearLayers() {
   }
 }
 
+const mapLineStyles = {
+  workingArea: { color: '#315f3c', weight: 2 },
+  island: { color: '#a8493f', weight: 2 },
+  guide: { color: '#2f6fbd', weight: 3 },
+  station: { color: '#ad7a1f', weight: 3 }
+};
+
+function clearMapOverlay() {
+  if (mapOverlayLayer) map.removeLayer(mapOverlayLayer);
+  mapOverlayLayer = null;
+  latestMapPayload = null;
+}
+
+function renderMapOverlay(payload, settings = mapOverlaySettings) {
+  const projected = projectMowerMap(
+    payload,
+    getMowerTrim(settings, selectedMowerId)
+  );
+  const replacement = L.layerGroup();
+  const options = (style) => ({
+    ...style,
+    fill: false,
+    interactive: false,
+    pane: 'mowerMapPane'
+  });
+
+  projected.workingAreas.forEach((area) => {
+    L.polygon(area.latLngs, options(mapLineStyles.workingArea))
+      .addTo(replacement);
+  });
+  projected.islands.forEach((island) => {
+    L.polygon(island.latLngs, options(mapLineStyles.island))
+      .addTo(replacement);
+  });
+  projected.guides.forEach((guide) => {
+    L.polyline(guide.latLngs, options(mapLineStyles.guide))
+      .addTo(replacement);
+  });
+  L.polyline(
+    projected.chargingStationLine.latLngs,
+    options(mapLineStyles.station)
+  ).addTo(replacement);
+
+  if (mapOverlayLayer) map.removeLayer(mapOverlayLayer);
+  replacement.addTo(map);
+  mapOverlayLayer = replacement;
+  latestMapPayload = payload;
+}
+
+function redrawMapOverlayPreview(settings = mapOverlaySettings) {
+  if (!latestMapPayload || latestMapPayload.status !== 'ready') return;
+  renderMapOverlay(latestMapPayload, settings);
+}
+
 function renderHeatmap(heat, fitKey, settings = heatmapSettings) {
   latestHeat = heat;
   latestFitKey = fitKey;
@@ -590,9 +656,60 @@ async function loadData(statusContext = null) {
   }
 }
 
+function overlayMessageFor(code) {
+  if (code === 'MAP_NOT_AVAILABLE') {
+    return 'No generated boundary map is available for this mower.';
+  }
+  if (code === 'MAP_INVALID') {
+    return 'The generated boundary map could not be read.';
+  }
+  if (code === 'UNKNOWN_MOWER') {
+    return 'Boundary map is unavailable for this mower.';
+  }
+  return 'Boundary map is temporarily unavailable.';
+}
+
+async function loadMapOverlay() {
+  const requestId = ++latestMapRequestId;
+  const mowerId = selectedMowerId;
+  if (!mowerId) {
+    clearMapOverlay();
+    mapOverlayMessage = 'Select a mower to load its boundary map.';
+    return;
+  }
+
+  try {
+    const response = await fetch(
+      `/api/mowers/${encodeURIComponent(selectedMowerId)}/map`
+    );
+    const payload = await response.json();
+    if (requestId !== latestMapRequestId || mowerId !== selectedMowerId) return;
+    if (!response.ok) {
+      clearMapOverlay();
+      mapOverlayMessage = overlayMessageFor(payload?.error?.code);
+      return;
+    }
+    if (payload.status === 'anchor-unavailable') {
+      clearMapOverlay();
+      mapOverlayMessage = 'Boundary map is waiting for a completed return-home position.';
+      return;
+    }
+
+    renderMapOverlay(payload);
+    mapOverlayMessage = payload.stale
+      ? 'Showing the last available boundary map.'
+      : '';
+  } catch (error) {
+    console.error(error);
+    if (requestId !== latestMapRequestId || mowerId !== selectedMowerId) return;
+    clearMapOverlay();
+    mapOverlayMessage = 'Boundary map is temporarily unavailable.';
+  }
+}
+
 async function refreshAll() {
   const context = await fetchStatus();
-  await loadData(context);
+  await Promise.all([loadData(context), loadMapOverlay()]);
 }
 
 function scheduleFallbackRefresh() {
@@ -635,11 +752,13 @@ function startServerNotifications() {
 
 mowerPicker.addEventListener('change', () => {
   if (!mowerPicker.value) return;
+  latestMapRequestId += 1;
+  clearMapOverlay();
   selectedMowerId = mowerPicker.value;
   selectedSessionId = 'latest';
   resetMapFit();
   const context = renderStatus();
-  loadData(context);
+  Promise.all([loadData(context), loadMapOverlay()]);
 });
 
 sessionSelect.addEventListener('change', () => {
