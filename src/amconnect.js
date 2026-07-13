@@ -13,6 +13,47 @@ let wss = null;
 const pendingPersistence = new Set();
 export const MAX_PENDING_PERSISTENCE = 100;
 
+export function createConnectionLifecycle() {
+  let generation = 0;
+  let stopped = true;
+
+  return {
+    start() {
+      stopped = false;
+      generation += 1;
+      return generation;
+    },
+    stop() {
+      stopped = true;
+      generation += 1;
+    },
+    isCurrent(candidate) {
+      return !stopped && candidate === generation;
+    },
+    shouldReconnect(candidate) {
+      return !stopped && candidate === generation;
+    }
+  };
+}
+
+export function waitForWebSocketClose(socket) {
+  if (!socket || socket.readyState === WebSocket.CLOSED) return Promise.resolve();
+
+  return new Promise((resolve) => {
+    socket.once('close', resolve);
+    if (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING) {
+      try {
+        socket.close();
+      } catch {
+        socket.removeListener('close', resolve);
+        resolve();
+      }
+    }
+  });
+}
+
+const connectionLifecycle = createConnectionLifecycle();
+
 function publishClientChange({ type, mowerId, eventId, timestamp, changed }) {
   clientEventBus.publish({ type, mowerId, eventId, timestamp, changed });
 }
@@ -240,29 +281,36 @@ export function getPendingPersistenceCount() {
   return pendingPersistence.size;
 }
 
-export async function startWebSocket(apiKey, apiSecret) {
+async function connectWebSocket(apiKey, apiSecret, generation) {
   console.log('🔐 Connecting...');
 
-  let token = await getToken(apiKey, apiSecret);
+  const token = await getToken(apiKey, apiSecret);
+  if (!connectionLifecycle.isCurrent(generation)) return;
 
   if (reconnectTimer) {
     clearTimeout(reconnectTimer);
     reconnectTimer = null;
   }
 
-  wss = new WebSocket('wss://ws.openapi.husqvarna.dev/v1', {
+  const socket = new WebSocket('wss://ws.openapi.husqvarna.dev/v1', {
     headers: {
       Authorization: `Bearer ${token}`
     }
   });
+  wss = socket;
 
-  wss.on('message', enqueueIncomingEvent);
-  wss.on('close', async (code, reason) => {
+  socket.on('message', enqueueIncomingEvent);
+  socket.on('close', (code, reason) => {
     console.warn(`🔓 Disconnected: ${code} - ${reason}`);
-    if (pingInterval) {
+    if (wss === socket) {
+      wss = null;
+    }
+    if (wss === null && pingInterval) {
       clearInterval(pingInterval);
       pingInterval = null;
     }
+    if (!connectionLifecycle.shouldReconnect(generation)) return;
+
     reconnectAttempts += 1;
     let delay = 0;
     if (reconnectAttempts > 1) {
@@ -271,12 +319,14 @@ export async function startWebSocket(apiKey, apiSecret) {
       delay = base + jitter;
     }
     reconnectTimer = setTimeout(() => {
-      startWebSocket(apiKey, apiSecret).catch((err) => {
+      reconnectTimer = null;
+      if (!connectionLifecycle.shouldReconnect(generation)) return;
+      connectWebSocket(apiKey, apiSecret, generation).catch((err) => {
         console.error('Reconnect attempt failed:', err);
       });
     }, delay);
   });
-  wss.on('error', (err) => {
+  socket.on('error', (err) => {
     console.error('⚠️ Connection error:', err);
   });
 
@@ -290,13 +340,21 @@ export async function startWebSocket(apiKey, apiSecret) {
     }
   }, 60000);
 
-  wss.on('open', () => {
-    reconnectAttempts = 0;
+  socket.on('open', () => {
+    if (connectionLifecycle.isCurrent(generation) && wss === socket) {
+      reconnectAttempts = 0;
+    }
   });
+}
+
+export async function startWebSocket(apiKey, apiSecret) {
+  const generation = connectionLifecycle.start();
+  return connectWebSocket(apiKey, apiSecret, generation);
 }
 
 export async function stopWebSocket() {
   console.warn('⚠️ Stop WebSocket called');
+  connectionLifecycle.stop();
 
   if (reconnectTimer) {
     clearTimeout(reconnectTimer);
@@ -306,7 +364,7 @@ export async function stopWebSocket() {
     clearInterval(pingInterval);
     pingInterval = null;
   }
-  if (wss && (wss.readyState === WebSocket.OPEN || wss.readyState === WebSocket.CONNECTING)) {
-    try { wss.close(); } catch {}
-  }
+  const socket = wss;
+  wss = null;
+  await waitForWebSocketClose(socket);
 }
