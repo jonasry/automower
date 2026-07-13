@@ -6,6 +6,7 @@ import { closeDb } from './db.js';
 import { assertDatabaseReady } from './dbMigrations.js';
 import { createShutdown, startRuntime } from './appLifecycle.js';
 import { createMowerMapClient } from './mowerMapClient.js';
+import { clientEventBus } from './clientEvents.js';
 
 async function getMowerData(accessToken, apiKey) {
   const response = await fetch('https://api.amc.husqvarna.dev/v1/mowers', {
@@ -105,6 +106,7 @@ async function loadMowerState(token, apiKey, apiSecret) {
   });
   const shutdown = createShutdown({
     stopWebSocket,
+    closeClientEvents: () => clientEventBus.close(),
     closeHttpServer,
     drainIncomingEvents,
     closeDb,

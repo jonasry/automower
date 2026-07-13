@@ -36,6 +36,7 @@ test('shutdown is ordered and idempotent', async () => {
   const calls = [];
   const shutdown = createShutdown({
     stopWebSocket: async () => { calls.push('websocket'); },
+    closeClientEvents: async () => { calls.push('events'); },
     closeHttpServer: async () => { calls.push('http'); },
     drainIncomingEvents: async () => { calls.push('drain'); },
     closeDb: async () => { calls.push('database'); },
@@ -46,17 +47,18 @@ test('shutdown is ordered and idempotent', async () => {
   const second = shutdown();
   assert.equal(first, second);
   await first;
-  assert.deepEqual(calls, ['websocket', 'http', 'drain', 'database']);
+  assert.deepEqual(calls, ['websocket', 'events', 'http', 'drain', 'database']);
 });
 
-test('shutdown rejects when in-flight work exceeds its timeout', async () => {
+test('shutdown timeout covers a stalled HTTP close', async () => {
   const shutdown = createShutdown({
     stopWebSocket: async () => {},
-    closeHttpServer: async () => {},
-    drainIncomingEvents: async () => new Promise(() => {}),
+    closeClientEvents: async () => {},
+    closeHttpServer: async () => new Promise(() => {}),
+    drainIncomingEvents: async () => {},
     closeDb: async () => {},
     timeoutMs: 5
   });
 
-  await assert.rejects(shutdown(), /Timed out draining in-flight work after 5ms/);
+  await assert.rejects(shutdown(), /Timed out during shutdown after 5ms/);
 });

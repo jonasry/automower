@@ -17,7 +17,7 @@ function withTimeout(promise, timeoutMs) {
   let timeout;
   const expired = new Promise((resolve, reject) => {
     timeout = setTimeout(() => {
-      reject(new Error(`Timed out draining in-flight work after ${timeoutMs}ms`));
+      reject(new Error(`Timed out during shutdown after ${timeoutMs}ms`));
     }, timeoutMs);
   });
   return Promise.race([promise, expired]).finally(() => clearTimeout(timeout));
@@ -25,6 +25,7 @@ function withTimeout(promise, timeoutMs) {
 
 function createShutdown({
   stopWebSocket,
+  closeClientEvents,
   closeHttpServer,
   drainIncomingEvents,
   closeDb,
@@ -34,12 +35,14 @@ function createShutdown({
 
   return function shutdown() {
     if (!shutdownPromise) {
-      shutdownPromise = (async () => {
+      const work = (async () => {
         await stopWebSocket();
+        await closeClientEvents();
         await closeHttpServer();
-        await withTimeout(Promise.resolve(drainIncomingEvents()), timeoutMs);
+        await drainIncomingEvents();
         await closeDb();
       })();
+      shutdownPromise = withTimeout(work, timeoutMs);
     }
     return shutdownPromise;
   };
