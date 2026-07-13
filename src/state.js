@@ -33,3 +33,13 @@ export function updateMowerState(mowerId, updates = {}) {
 export function getAllMowerStates() {
   return Array.from(mowerStates.values());
 }
+
+export function resolveInitialSessionId(activity, latestPosition, fallbackSessionId) {
+  if (
+    latestPosition?.activity === activity &&
+    Number.isSafeInteger(latestPosition.sessionId)
+  ) {
+    return latestPosition.sessionId;
+  }
+  return fallbackSessionId;
+}

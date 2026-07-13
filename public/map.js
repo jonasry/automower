@@ -4,17 +4,16 @@ import {
   buildGradient,
   buildHeatmapOptions,
   loadHeatmapSettings,
-  normalizeHeatmapSettings,
-  saveHeatmapSettings
+  normalizeHeatmapSettings
 } from './heatmapSettings.js';
 import {
   DEFAULT_MAP_OVERLAY_SETTINGS,
   getMowerTrim,
   loadMapOverlaySettings,
-  saveMapOverlaySettings,
   setMowerTrim
 } from './mapOverlaySettings.js';
 import { projectMowerMap } from './mapProjection.js';
+import { saveMapSettingsTransaction } from './mapSettingsTransaction.js';
 
 const REFRESH_FALLBACK_MS = 30000;
 
@@ -289,11 +288,16 @@ function resetDraftSettings() {
 
 function saveConfigureMode() {
   try {
-    heatmapSettings = saveHeatmapSettings(undefined, readDraftFromControls());
-    mapOverlaySettings = saveMapOverlaySettings(
-      undefined,
-      readOverlayDraftFromControls(draftMapOverlaySettings)
-    );
+    const saved = saveMapSettingsTransaction(undefined, {
+      currentHeatmapSettings: heatmapSettings,
+      currentMapOverlaySettings: mapOverlaySettings,
+      nextHeatmapSettings: readDraftFromControls(),
+      nextMapOverlaySettings: readOverlayDraftFromControls(
+        draftMapOverlaySettings
+      )
+    });
+    heatmapSettings = saved.heatmapSettings;
+    mapOverlaySettings = saved.mapOverlaySettings;
     draftHeatmapSettings = null;
     draftMapOverlaySettings = null;
     setSettingsError('');

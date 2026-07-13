@@ -13,6 +13,18 @@ function response(body, status = 200) {
   });
 }
 
+function cancellableResponse(status, onCancel, headers = {}) {
+  const body = new ReadableStream({
+    start(controller) {
+      controller.enqueue(new TextEncoder().encode('discard me'));
+    },
+    cancel() {
+      onCancel();
+    }
+  });
+  return new Response(body, { status, headers });
+}
+
 test('uses Automower headers, encodes mower id, and caches for one hour', async () => {
   let now = 1000;
   const requests = [];
@@ -118,4 +130,55 @@ test('maps upstream absence, repeated auth failure, and oversized bodies to safe
     oversized.getGeometry('mower'),
     (error) => error.code === 'MAP_INVALID'
   );
+});
+
+test('cancels discarded retry, error, and declared-oversized response bodies', async () => {
+  let retryCancellations = 0;
+  let retryCalls = 0;
+  const retrying = createMowerMapClient({
+    apiKey: 'key',
+    apiSecret: 'secret',
+    getToken: async () => 'old',
+    refreshToken: async () => 'new',
+    fetchImpl: async () => {
+      retryCalls += 1;
+      return retryCalls === 1
+        ? cancellableResponse(401, () => { retryCancellations += 1; })
+        : response(svg);
+    }
+  });
+  await retrying.getGeometry('mower');
+  assert.equal(retryCancellations, 1);
+
+  let errorCancellations = 0;
+  const failing = createMowerMapClient({
+    apiKey: 'key',
+    apiSecret: 'secret',
+    getToken: async () => 'token',
+    refreshToken: async () => 'token',
+    fetchImpl: async () => cancellableResponse(
+      500,
+      () => { errorCancellations += 1; }
+    )
+  });
+  await assert.rejects(failing.getGeometry('mower'), /status 500/);
+  assert.equal(errorCancellations, 1);
+
+  let oversizedCancellations = 0;
+  const oversized = createMowerMapClient({
+    apiKey: 'key',
+    apiSecret: 'secret',
+    getToken: async () => 'token',
+    refreshToken: async () => 'token',
+    fetchImpl: async () => cancellableResponse(
+      200,
+      () => { oversizedCancellations += 1; },
+      { 'content-length': String(2 * 1024 * 1024 + 1) }
+    )
+  });
+  await assert.rejects(
+    oversized.getGeometry('mower'),
+    (error) => error.code === 'MAP_INVALID'
+  );
+  assert.equal(oversizedCancellations, 1);
 });

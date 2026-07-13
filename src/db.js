@@ -192,6 +192,27 @@ async function getChargingStationAnchor(
   };
 }
 
+async function getLatestPositionContext(mowerId) {
+  if (!mowerId) return null;
+  const result = await getPool().query(`
+    SELECT session_id, activity, timestamp
+    FROM positions
+    WHERE mower_id = $1
+      AND session_id IS NOT NULL
+      AND timestamp IS NOT NULL
+    ORDER BY timestamp DESC, id DESC
+    LIMIT 1
+  `, [mowerId]);
+
+  const row = result.rows[0];
+  if (!row) return null;
+  return {
+    activity: row.activity,
+    sessionId: toSafeInteger(row.session_id, 'positions.session_id'),
+    timestamp: iso(row.timestamp)
+  };
+}
+
 function toDurationMinutes(start, end) {
   const startMs = Date.parse(start ?? '');
   const endMs = Date.parse(end ?? '');
@@ -327,6 +348,7 @@ export {
   getLatestBatteryReading,
   getLatestMessage,
   getLatestMessages,
+  getLatestPositionContext,
   getPositions,
   getSessionSummaries,
   getStoredMowerIds,

@@ -9,9 +9,19 @@ import {
 export const MAP_CACHE_TTL_MS = 60 * 60 * 1000;
 const MAP_FETCH_TIMEOUT_MS = 10000;
 
+async function discardResponse(response) {
+  if (!response.body || response.bodyUsed) return;
+  try {
+    await response.body.cancel();
+  } catch {
+    // The response is already being discarded; cleanup failure is non-fatal.
+  }
+}
+
 async function readLimitedText(response, maxBytes = MAX_SVG_BYTES) {
   const declared = Number(response.headers.get('content-length'));
   if (Number.isFinite(declared) && declared > maxBytes) {
+    await discardResponse(response);
     throw new MowerMapError('MAP_INVALID', 'Generated map exceeds size limit');
   }
   if (!response.body) return '';
@@ -60,16 +70,19 @@ export function createMowerMapClient({
     let token = await getToken(apiKey, apiSecret);
     let response = await request(mowerId, token);
     if (response.status === 401 || response.status === 403) {
+      await discardResponse(response);
       token = await refreshToken(apiKey, apiSecret);
       response = await request(mowerId, token);
     }
     if (response.status === 404) {
+      await discardResponse(response);
       throw new MowerMapError(
         'MAP_NOT_AVAILABLE',
         'No generated mower map is available'
       );
     }
     if (!response.ok) {
+      await discardResponse(response);
       throw new MowerMapError(
         'MAP_FETCH_FAILED',
         `Generated map request failed with status ${response.status}`

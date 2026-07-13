@@ -1,8 +1,8 @@
 import { configureMowerMapClient, startHttpServer } from './server.js';
 import { drainIncomingEvents, startWebSocket, stopWebSocket } from './amconnect.js';
-import { updateMowerState } from './state.js';
+import { resolveInitialSessionId, updateMowerState } from './state.js';
 import { getToken, refreshToken, loadCredentials } from './auth.js';
-import { closeDb } from './db.js';
+import { closeDb, getLatestPositionContext } from './db.js';
 import { assertDatabaseReady } from './dbMigrations.js';
 import { createShutdown, startRuntime } from './appLifecycle.js';
 import { createMowerMapClient } from './mowerMapClient.js';
@@ -40,13 +40,15 @@ async function loadMowerState(token, apiKey, apiSecret) {
       const mowerName = mower.attributes?.system?.name || 'Unknown';
       const timeZone = mower.attributes?.settings?.timeZone ?? null;
       const activity = mower.attributes?.mower?.activity ?? 'UNKNOWN';
+      const latestPosition = await getLatestPositionContext(mowerId);
+      const sessionId = resolveInitialSessionId(activity, latestPosition, nowTs);
       const batteryRaw = mower.attributes?.battery?.batteryPercent;
       const batteryPercent = batteryRaw == null ? null : Math.round(Number(batteryRaw));
       const state = updateMowerState(mowerId, {
         mowerName,
         timeZone,
         activity,
-        sessionId: nowTs,
+        sessionId,
         lastActivityAt: nowIso,
         lastEventAt: nowIso,
         batteryPercent: Number.isFinite(batteryPercent) ? batteryPercent : null,
