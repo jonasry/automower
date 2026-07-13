@@ -52,4 +52,3 @@ Regression coverage will verify:
 - lifecycle shutdown invokes SSE closure before HTTP closure;
 - the lifecycle timeout also covers a stalled HTTP close;
 - existing unexpected-disconnect reconnection and shutdown idempotence remain intact.
-
