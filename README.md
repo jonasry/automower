@@ -47,6 +47,22 @@ npm start
 
 The map is available at <http://localhost:3000/map.html>.
 
+## Generated mower map overlay
+
+For each selected mower, the server downloads Husqvarna's generated SVG map
+from `/v1/mowers/{mower-id}/maps/generated` and exposes only normalized geometry
+to the browser. The overlay uses the final recorded position from the latest
+completed `GOING_HOME` session as its charging-station anchor.
+
+The current conversion assumes 1,000 SVG units per metre, SVG X pointing east,
+SVG Y pointing south, and zero rotation. Working areas, islands, guides, and the
+charging-station reference are drawn as outlines. The Settings panel stores
+per-mower east/west and north/south trim in browser local storage.
+
+If no generated map or completed return-home position is available, the normal
+heatmap and mower trail continue to work without the boundary overlay. The
+overlay is informational and is not a mower navigation or safety boundary.
+
 Application startup checks connectivity and migration state. It never changes
 the schema automatically. If migrations are pending, run `npm run db:migrate`
 before restarting.
