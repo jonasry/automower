@@ -76,7 +76,6 @@ Create `src/fixtures/mower-map.svg` with this complete fixture:
   <polygon id="main_area_0" title="Working area 0" stroke="green" fill="green" points="-2000,-2000 3000,-2000 3000,4000 -2000,4000" />
   <polygon id="island_1" title="Island 1" stroke="red" fill="red" points="0,0 500,0 500,500 0,500" />
   <polyline id="guide_1" stroke="blue" stroke-width="500" points="-1000,500 0,-1000 2000,-1500" />
-  <script>alert('ignored')</script>
 </svg>
 ```
 
@@ -112,8 +111,20 @@ test('parses supported geometry, metadata, and lona station origin', async () =>
   assert.equal(parsed.geometry.islands[0].id, 'island_1');
   assert.equal(parsed.geometry.guides[0].id, 'guide_1');
   assert.deepEqual(parsed.geometry.chargingStationLine.points[1], { x: 0, y: -1000 });
-  assert.equal(JSON.stringify(parsed).includes('alert'), false);
   assert.equal(JSON.stringify(parsed).includes('fill'), false);
+});
+
+test('drops unsupported executable and external content from normalized geometry', () => {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg">
+    <polygon id="main_area_0" points="0,0 1000,0 1000,1000" />
+    <polyline id="lona_cs" points="0,0 1000,0" />
+    <script>alert('not serialized')</script>
+    <image href="https://example.invalid/tracker.png" />
+  </svg>`;
+  const serialized = JSON.stringify(parseMowerMapSvg(svg));
+
+  assert.equal(serialized.includes('alert'), false);
+  assert.equal(serialized.includes('example.invalid'), false);
 });
 
 test('rejects unsafe and structurally invalid documents', () => {
