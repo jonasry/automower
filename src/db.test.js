@@ -5,6 +5,7 @@ import { randomBytes } from 'node:crypto';
 import { getPool } from './dbPool.js';
 import { assertDatabaseReady } from './dbMigrations.js';
 import {
+  getChargingStationAnchor,
   getLatestBatteryReading,
   getPositions,
   getSessionSummaries,
@@ -215,4 +216,62 @@ test('summarizes mowing sessions and includes messages inside their time range',
       severity: 'WARNING'
     }]
   }]);
+});
+
+test('selects the final position from the latest eligible going-home session', async () => {
+  const mowerId = `mower-map-anchor-${Date.now()}`;
+  const rows = [
+    [100, 'GOING_HOME', 55.1000, 13.1000, '2026-07-13T10:00:00.000Z'],
+    [100, 'GOING_HOME', 55.1001, 13.1001, '2026-07-13T10:05:00.000Z'],
+    [200, 'GOING_HOME', 55.2000, 13.2000, '2026-07-13T11:00:00.000Z'],
+    [200, 'GOING_HOME', 55.2002, 13.2002, '2026-07-13T11:08:00.000Z'],
+    [300, 'MOWING', 56, 14, '2026-07-13T12:00:00.000Z']
+  ];
+  for (const [sessionId, state, lat, lon, timestamp] of rows) {
+    await storePosition({
+      mowerId,
+      sessionId,
+      state,
+      lat,
+      lon,
+      timestamp,
+      eventId: null
+    });
+  }
+
+  assert.deepEqual(await getChargingStationAnchor(mowerId), {
+    lat: 55.2002,
+    lon: 13.2002,
+    timestamp: '2026-07-13T11:08:00.000Z',
+    sessionId: 200,
+    sourceActivity: 'GOING_HOME'
+  });
+  assert.deepEqual(
+    await getChargingStationAnchor(mowerId, { excludeSessionId: 200 }),
+    {
+      lat: 55.1001,
+      lon: 13.1001,
+      timestamp: '2026-07-13T10:05:00.000Z',
+      sessionId: 100,
+      sourceActivity: 'GOING_HOME'
+    }
+  );
+});
+
+test('returns null when only the excluded going-home session is available', async () => {
+  const mowerId = `mower-map-active-${Date.now()}`;
+  await storePosition({
+    mowerId,
+    sessionId: 400,
+    state: 'GOING_HOME',
+    lat: 55.4,
+    lon: 13.4,
+    timestamp: '2026-07-13T12:00:00.000Z',
+    eventId: null
+  });
+
+  assert.equal(
+    await getChargingStationAnchor(mowerId, { excludeSessionId: 400 }),
+    null
+  );
 });

@@ -134,6 +134,64 @@ async function getPositions({ mowerId, sessionId } = {}) {
   }));
 }
 
+async function getChargingStationAnchor(
+  mowerId,
+  { excludeSessionId = null } = {}
+) {
+  if (!mowerId) return null;
+  const excluded = excludeSessionId == null
+    ? null
+    : toSafeInteger(excludeSessionId, 'positions.session_id');
+  const result = await getPool().query(`
+    WITH eligible AS (
+      SELECT
+        id,
+        session_id,
+        lat,
+        lon,
+        timestamp,
+        MAX(timestamp) OVER (PARTITION BY session_id) AS session_end,
+        ROW_NUMBER() OVER (
+          PARTITION BY session_id
+          ORDER BY timestamp DESC, id DESC
+        ) AS position_rank
+      FROM positions
+      WHERE mower_id = $1
+        AND activity = 'GOING_HOME'
+        AND session_id IS NOT NULL
+        AND timestamp IS NOT NULL
+        AND lat IS NOT NULL
+        AND lon IS NOT NULL
+        AND lat NOT IN (
+          'NaN'::DOUBLE PRECISION,
+          'Infinity'::DOUBLE PRECISION,
+          '-Infinity'::DOUBLE PRECISION
+        )
+        AND lon NOT IN (
+          'NaN'::DOUBLE PRECISION,
+          'Infinity'::DOUBLE PRECISION,
+          '-Infinity'::DOUBLE PRECISION
+        )
+        AND ($2::BIGINT IS NULL OR session_id <> $2)
+    )
+    SELECT session_id, lat, lon, timestamp
+    FROM eligible
+    WHERE position_rank = 1
+    ORDER BY session_end DESC, session_id DESC
+    LIMIT 1
+  `, [mowerId, excluded]);
+
+  const row = result.rows[0];
+  if (!row) return null;
+  return {
+    lat: Number(row.lat),
+    lon: Number(row.lon),
+    timestamp: iso(row.timestamp),
+    sessionId: toSafeInteger(row.session_id, 'positions.session_id'),
+    sourceActivity: 'GOING_HOME'
+  };
+}
+
 function toDurationMinutes(start, end) {
   const startMs = Date.parse(start ?? '');
   const endMs = Date.parse(end ?? '');
@@ -265,6 +323,7 @@ async function closeDb() {
 
 export {
   closeDb,
+  getChargingStationAnchor,
   getLatestBatteryReading,
   getLatestMessage,
   getLatestMessages,
