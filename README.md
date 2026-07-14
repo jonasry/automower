@@ -110,6 +110,17 @@ raw `JSONB` payload. Heatmap points are stored in `positions`, with `event_id`
 linking a point to its source event. PostgreSQL conflict handling suppresses
 duplicate events and positions.
 
+WebSocket messages are persisted sequentially in arrival order. For a position
+message, its event row is written before its linked position row. Position
+identity IDs therefore define mower trail and heat-map interpolation order;
+timestamps remain informational and are not used to order waypoints because
+events without a source timestamp receive an arrival timestamp.
+
+If an individual event or position insert fails, the error is logged and
+processing continues with the next queued WebSocket message. A failed event
+insert does not prevent an otherwise valid position from being stored without
+an event link.
+
 Inspect recent events with `psql`:
 
 ```bash
@@ -167,8 +178,6 @@ test restoration periodically.
 Access tokens are cached in
 `$HOME/.config/autoplanner/access_token.json` with owner-only permissions. The
 WebSocket reconnects after the Husqvarna service's timeout or a network
-interruption and sends a ping every 60 seconds. PostgreSQL failures do not
-terminate the WebSocket. Live mower state continues updating, while database
-work is bounded to 100 pending events; further persistence is dropped and
-logged until capacity returns. The app does not replay telemetry missed during
-a database outage.
+interruption and sends a ping every 60 seconds. Incoming messages are handled
+through the sequential persistence behavior documented under **Event storage
+and replay**.
