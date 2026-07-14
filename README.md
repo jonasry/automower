@@ -45,6 +45,13 @@ npm run db:migrate:status
 npm start
 ```
 
+Note that if running on a Mac, to prevent the process from going to sleep you need to use `caffeinate`:
+
+```bash
+# caffeinate -s: prevent system sleep on AC power.
+caffeinate -s npm start
+```
+
 The map is available at <http://localhost:3000/map.html>.
 
 ## Generated mower map overlay
