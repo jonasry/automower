@@ -141,7 +141,7 @@ test('does not replace a different non-null position event link', async () => {
   assert.equal(Number(result.rows[0].event_id), firstEventId);
 });
 
-test('reads ordered positions with mower and session filters', async () => {
+test('reads one mower session in position insertion order', async () => {
   await storePosition({
     mowerId: 'mower-read-a', sessionId: 10, state: 'MOWING', lat: 55.2, lon: 13.2,
     timestamp: '2026-07-12T13:02:00.000Z', eventId: null
@@ -151,16 +151,21 @@ test('reads ordered positions with mower and session filters', async () => {
     timestamp: '2026-07-12T13:01:00.000Z', eventId: null
   });
   await storePosition({
+    mowerId: 'mower-read-a', sessionId: 10, state: 'MOWING', lat: 55.3, lon: 13.3,
+    timestamp: '2026-07-12T13:01:00.000Z', eventId: null
+  });
+  await storePosition({
     mowerId: 'mower-read-b', sessionId: 20, state: 'MOWING', lat: 56.1, lon: 14.1,
     timestamp: '2026-07-12T13:00:00.000Z', eventId: null
   });
 
   const rows = await getPositions({ mowerId: 'mower-read-a', sessionId: 10 });
-  assert.deepEqual(rows.map((row) => row.timestamp), [
-    '2026-07-12T13:01:00.000Z',
-    '2026-07-12T13:02:00.000Z'
-  ]);
-  assert.ok(rows.every((row) => row.session_id === 10));
+
+  assert.deepEqual(rows.map((row) => row.lat), [55.2, 55.1, 55.3]);
+  assert.ok(rows.every((row, index) => Number.isSafeInteger(row.id) && (
+    index === 0 || row.id > rows[index - 1].id
+  )));
+  assert.ok(rows.every((row) => row.mower_id === 'mower-read-a' && row.session_id === 10));
 });
 
 test('reads battery JSONB and discovers mowers across both tables', async () => {

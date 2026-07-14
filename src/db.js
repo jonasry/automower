@@ -107,28 +107,26 @@ function normalizedLimit(value, fallback, minimum = 1) {
 }
 
 async function getPositions({ mowerId, sessionId } = {}) {
-  const clauses = [];
-  const params = [];
+  if (!mowerId) return [];
 
-  if (mowerId) {
-    params.push(mowerId);
-    clauses.push(`mower_id = $${params.length}`);
-  }
+  const clauses = ['mower_id = $1'];
+  const params = [mowerId];
+
   if (sessionId != null && sessionId !== '') {
     params.push(sessionId);
     clauses.push(`session_id = $${params.length}`);
   }
 
-  const where = clauses.length ? ` WHERE ${clauses.join(' AND ')}` : '';
-  const order = mowerId && sessionId == null ? 'timestamp' : 'mower_id, timestamp';
   const result = await getPool().query(`
-    SELECT mower_id, session_id, lat, lon, timestamp, activity
-    FROM positions${where}
-    ORDER BY ${order}
+    SELECT id, mower_id, session_id, lat, lon, timestamp, activity
+    FROM positions
+    WHERE ${clauses.join(' AND ')}
+    ORDER BY id
   `, params);
 
   return result.rows.map((row) => ({
     ...row,
+    id: toSafeInteger(row.id, 'positions.id'),
     session_id: row.session_id == null ? null : toSafeInteger(row.session_id, 'positions.session_id'),
     timestamp: iso(row.timestamp)
   }));

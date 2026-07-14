@@ -51,3 +51,20 @@ test('returns 500 JSON for unexpected database query failures', async () => {
     });
   });
 });
+
+test('returns empty positions without querying all mowers', async () => {
+  setPoolForTests({
+    query: async () => { throw new Error('positions query should not run'); },
+    end: async () => {}
+  });
+
+  await withServer(async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/api/positions`);
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), {
+      heat: [],
+      recent: [],
+      session: null
+    });
+  });
+});

@@ -61,15 +61,17 @@ app.use(express.static(path.join(__dirname, '../public')));
 
 app.get('/api/positions', async (req, res) => {
   const { mowerId, sessionId } = req.query;
-  const heatFilters = {};
-  const trailFilters = {};
+  const selectedMowerId = typeof mowerId === 'string' ? mowerId.trim() : '';
+
+  res.set('Cache-Control', 'public, max-age=15');
+  if (!selectedMowerId) {
+    return res.json(buildPositionsPayload());
+  }
+
+  const heatFilters = { mowerId: selectedMowerId };
+  const trailFilters = { mowerId: selectedMowerId };
   let selectedSessionId = null;
 
-  if (typeof mowerId === 'string' && mowerId.trim().length > 0) {
-    const selectedMowerId = mowerId.trim();
-    heatFilters.mowerId = selectedMowerId;
-    trailFilters.mowerId = selectedMowerId;
-  }
   if (typeof sessionId === 'string' && sessionId.trim().length > 0) {
     const parsed = Number(sessionId);
     if (Number.isFinite(parsed)) {
@@ -83,7 +85,6 @@ app.get('/api/positions', async (req, res) => {
     ? heatData
     : await getInterpolatedPositions(trailFilters);
 
-  res.set('Cache-Control', 'public, max-age=15');
   res.json(buildPositionsPayload({ heatData, trailData, selectedSessionId }));
 });
 
