@@ -2,40 +2,52 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { drainIncomingEvents, enqueueIncomingEvent } from './amconnect.js';
-import { getPositions } from './db.js';
-import { mowerStates, updateMowerState } from './state.js';
+import { setPoolForTests } from './dbPool.js';
+import { mowerStates } from './state.js';
 
-test('serializes activity and position persistence in arrival order', async () => {
-  const mowerId = 'ordered-ingestion-mower';
-  const activityTimestamp = '2026-07-12T17:00:00.000Z';
-  mowerStates.clear();
-  updateMowerState(mowerId, {
-    activity: 'CHARGING',
-    suppressMapAnchor: true
-  });
-
-  enqueueIncomingEvent(Buffer.from(JSON.stringify({
-    id: mowerId,
-    type: 'mower-event-v2',
-    attributes: {
-      mower: { activity: 'MOWING' },
-      metadata: { timestamp: activityTimestamp }
-    }
-  })));
-  enqueueIncomingEvent(Buffer.from(JSON.stringify({
+function positionEvent(mowerId, marker) {
+  return Buffer.from(JSON.stringify({
     id: mowerId,
     type: 'position-event-v2',
     attributes: {
-      position: { latitude: 55.4, longitude: 13.4 },
-      metadata: { timestamp: '2026-07-12T17:00:30.000Z' }
+      position: { latitude: marker, longitude: 13 + marker / 100 }
     }
-  })));
+  }));
+}
 
+test('persists WebSocket messages one at a time in arrival order', async () => {
+  const calls = [];
+  let releaseFirstEvent;
+  const firstEventGate = new Promise((resolve) => {
+    releaseFirstEvent = resolve;
+  });
+
+  setPoolForTests({
+    query: async (sql, params) => {
+      const marker = params[8].attributes.position.latitude;
+      calls.push(`event:${marker}`);
+      if (marker === 1) await firstEventGate;
+      return { rows: [{ id: String(marker) }] };
+    },
+    connect: async () => ({
+      query: async (sql, params) => {
+        if (sql.includes('INSERT INTO positions')) calls.push(`position:${params[3]}`);
+        return { rows: [] };
+      },
+      release() {}
+    }),
+    end: async () => {}
+  });
+  mowerStates.clear();
+
+  enqueueIncomingEvent(positionEvent('fifo-mower', 1));
+  enqueueIncomingEvent(positionEvent('fifo-mower', 2));
+  await new Promise((resolve) => setImmediate(resolve));
+  const callsBeforeRelease = [...calls];
+
+  releaseFirstEvent();
   await drainIncomingEvents();
 
-  const rows = await getPositions({ mowerId });
-  assert.equal(rows.length, 1);
-  assert.equal(rows[0].session_id, Date.parse(activityTimestamp));
-  assert.equal(mowerStates.get(mowerId).lastPosition.eventId != null, true);
-  assert.equal(mowerStates.get(mowerId).suppressMapAnchor, false);
+  assert.deepEqual(callsBeforeRelease, ['event:1']);
+  assert.deepEqual(calls, ['event:1', 'position:1', 'event:2', 'position:2']);
 });

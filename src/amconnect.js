@@ -10,8 +10,7 @@ let pingInterval = null;
 let reconnectTimer = null;
 let reconnectAttempts = 0;
 let wss = null;
-const pendingPersistence = new Set();
-export const MAX_PENDING_PERSISTENCE = 100;
+let ingestionChain = Promise.resolve();
 
 export function createConnectionLifecycle() {
   let generation = 0;
@@ -259,26 +258,16 @@ export async function handleIncomingEvent(data, { persist = true } = {}) {
 }
 
 export function enqueueIncomingEvent(data) {
-  if (pendingPersistence.size >= MAX_PENDING_PERSISTENCE) {
-    console.warn('Dropping event persistence because the database backlog is full');
-    return handleIncomingEvent(data, { persist: false });
-  }
-
-  const task = handleIncomingEvent(data);
-  pendingPersistence.add(task);
-  task.then(
-    () => pendingPersistence.delete(task),
-    () => pendingPersistence.delete(task)
-  );
-  return task;
+  ingestionChain = ingestionChain
+    .then(() => handleIncomingEvent(data))
+    .catch((err) => {
+      console.error('Queued WebSocket event error:', err);
+    });
+  return ingestionChain;
 }
 
 export function drainIncomingEvents() {
-  return Promise.allSettled([...pendingPersistence]);
-}
-
-export function getPendingPersistenceCount() {
-  return pendingPersistence.size;
+  return ingestionChain;
 }
 
 async function connectWebSocket(apiKey, apiSecret, generation) {
