@@ -196,6 +196,14 @@ select {
   background: #dfead7;
 }
 
+#map.is-overlay-trim-mode {
+  cursor: grab;
+}
+
+#map.is-overlay-trim-mode.is-overlay-trim-dragging {
+  cursor: grabbing;
+}
+
 .map-message {
   position: absolute;
   z-index: 500;

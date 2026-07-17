@@ -12,6 +12,7 @@ import {
   loadMapOverlaySettings,
   setMowerTrim
 } from './mapOverlaySettings.js';
+import { trimFromGeographicDrag } from './mapOverlayDrag.js';
 import { projectMowerMap } from './mapProjection.js';
 import { saveMapSettingsTransaction } from './mapSettingsTransaction.js';
 
@@ -43,6 +44,8 @@ let heatmapSettings = loadHeatmapSettings();
 let draftHeatmapSettings = null;
 let draftMapOverlaySettings = null;
 let isConfigMode = false;
+let overlayTrimDrag = null;
+let restoreMapDragging = false;
 let latestHeat = [];
 let latestFitKey = null;
 let refreshFallbackTimer = null;
@@ -80,6 +83,7 @@ const overlayNorthValue = document.getElementById('overlayNorthValue');
 const resetSettingsButton = document.getElementById('resetSettingsButton');
 const cancelSettingsButton = document.getElementById('cancelSettingsButton');
 const saveSettingsButton = document.getElementById('saveSettingsButton');
+const mapContainer = map.getContainer();
 
 const sessionLabelFormatter = new Intl.DateTimeFormat(undefined, {
   month: 'short',
@@ -233,8 +237,78 @@ function setMapOverlayMessage(message) {
   if (isConfigMode) mapOverlayStatus.textContent = message;
 }
 
+function beginOverlayTrimDrag(event) {
+  const canStart = isConfigMode &&
+    !overlayTrimDrag &&
+    event.isPrimary !== false &&
+    (event.pointerType !== 'mouse' || event.button === 0) &&
+    !event.target.closest?.('.leaflet-control') &&
+    selectedMowerId &&
+    latestMapPayload?.status === 'ready' &&
+    draftMapOverlaySettings;
+  if (!canStart) return;
+
+  overlayTrimDrag = {
+    pointerId: event.pointerId,
+    mowerId: selectedMowerId,
+    initialTrim: getMowerTrim(draftMapOverlaySettings, selectedMowerId),
+    startLatLng: map.mouseEventToLatLng(event)
+  };
+  mapContainer.setPointerCapture(event.pointerId);
+  mapContainer.classList.add('is-overlay-trim-dragging');
+  event.preventDefault();
+}
+
+function updateOverlayTrimDrag(event) {
+  const drag = overlayTrimDrag;
+  if (!drag || event.pointerId !== drag.pointerId) return;
+
+  const nextTrim = trimFromGeographicDrag(
+    drag.initialTrim,
+    drag.startLatLng,
+    map.mouseEventToLatLng(event)
+  );
+  if (!nextTrim || drag.mowerId !== selectedMowerId) return;
+
+  draftMapOverlaySettings = setMowerTrim(
+    draftMapOverlaySettings,
+    drag.mowerId,
+    nextTrim
+  );
+  renderOverlayControls(draftMapOverlaySettings);
+  redrawMapOverlayPreview(draftMapOverlaySettings);
+  event.preventDefault();
+}
+
+function finishOverlayTrimDrag(event) {
+  const drag = overlayTrimDrag;
+  if (!drag || (event && event.pointerId !== drag.pointerId)) return;
+
+  overlayTrimDrag = null;
+  mapContainer.classList.remove('is-overlay-trim-dragging');
+  if (
+    event?.type !== 'lostpointercapture' &&
+    mapContainer.hasPointerCapture(drag.pointerId)
+  ) {
+    mapContainer.releasePointerCapture(drag.pointerId);
+  }
+}
+
 function setPanelMode(mode) {
+  const wasConfigMode = isConfigMode;
   isConfigMode = mode === 'config';
+
+  if (isConfigMode && !wasConfigMode) {
+    restoreMapDragging = map.dragging.enabled();
+    map.dragging.disable();
+    mapContainer.classList.add('is-overlay-trim-mode');
+  } else if (!isConfigMode && wasConfigMode) {
+    finishOverlayTrimDrag();
+    mapContainer.classList.remove('is-overlay-trim-mode');
+    if (restoreMapDragging) map.dragging.enable();
+    restoreMapDragging = false;
+  }
+
   statusPanelContent.hidden = isConfigMode;
   configPanelContent.hidden = !isConfigMode;
 }
@@ -826,6 +900,7 @@ function startServerNotifications() {
 
 mowerPicker.addEventListener('change', () => {
   if (!mowerPicker.value) return;
+  finishOverlayTrimDrag();
   latestMapRequestId += 1;
   clearMapOverlay();
   selectedMowerId = mowerPicker.value;
@@ -864,6 +939,12 @@ saveSettingsButton.addEventListener('click', saveConfigureMode);
 ].forEach((input) => {
   input.addEventListener('input', previewDraftSettings);
 });
+
+mapContainer.addEventListener('pointerdown', beginOverlayTrimDrag);
+mapContainer.addEventListener('pointermove', updateOverlayTrimDrag);
+mapContainer.addEventListener('pointerup', finishOverlayTrimDrag);
+mapContainer.addEventListener('pointercancel', finishOverlayTrimDrag);
+mapContainer.addEventListener('lostpointercapture', finishOverlayTrimDrag);
 
 refreshFromNotification();
 startServerNotifications();

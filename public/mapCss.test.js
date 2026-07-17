@@ -26,3 +26,14 @@ test('activity badge keeps longer mower states on one line', () => {
   assert.equal(statusBadge.width, 'max-content');
   assert.equal(statusBadge['white-space'], 'nowrap');
 });
+
+test('shows direct manipulation cursors during overlay trim', () => {
+  assert.equal(
+    declarationsFor('#map.is-overlay-trim-mode').cursor,
+    'grab'
+  );
+  assert.equal(
+    declarationsFor('#map.is-overlay-trim-mode.is-overlay-trim-dragging').cursor,
+    'grabbing'
+  );
+});
