@@ -419,6 +419,32 @@ h1 {
   border-radius: var(--radius-md);
 }
 
+.track-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: max-content;
+  max-width: 100%;
+  margin-top: 12px;
+  color: var(--text);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.track-toggle input {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.track-toggle input:focus-visible {
+  outline: 3px solid rgba(95, 143, 105, 0.28);
+  outline-offset: 2px;
+}
+
 .panel-section--quiet {
   border-top: 1px solid var(--border);
   padding-top: 14px;
