@@ -47,12 +47,14 @@ let isConfigMode = false;
 let overlayTrimDrag = null;
 let restoreMapDragging = false;
 let latestHeat = [];
+let latestRecent = [];
 let latestFitKey = null;
 let refreshFallbackTimer = null;
 let refreshInFlight = null;
 
 const mowerPicker = document.getElementById('mowerPicker');
 const sessionSelect = document.getElementById('sessionSelect');
+const displayMowerTrack = document.getElementById('displayMowerTrack');
 const activityBadge = document.getElementById('activityBadge');
 const freshnessText = document.getElementById('freshnessText');
 const sessionTitle = document.getElementById('sessionTitle');
@@ -556,16 +558,19 @@ function renderStatus() {
   return { mower: activeMower, summary: activeSummary };
 }
 
+function clearRecentPath() {
+  if (!recentLayer) return;
+  map.removeLayer(recentLayer);
+  recentLayer = null;
+}
+
 function clearLayers() {
   if (heatLayer) {
     map.removeLayer(heatLayer);
     heatLayer = null;
   }
 
-  if (recentLayer) {
-    map.removeLayer(recentLayer);
-    recentLayer = null;
-  }
+  clearRecentPath();
 
   if (messageLayer) {
     map.removeLayer(messageLayer);
@@ -686,6 +691,10 @@ function makeMessageMarker(severity, icon) {
 }
 
 function renderRecentPath(recent) {
+  latestRecent = recent;
+  clearRecentPath();
+  if (!displayMowerTrack.checked) return;
+
   recentLayer = L.layerGroup();
   const polylinePoints = [];
 
@@ -920,6 +929,10 @@ sessionSelect.addEventListener('change', () => {
   resetMapFit();
   const context = renderStatus();
   loadData(context);
+});
+
+displayMowerTrack.addEventListener('change', () => {
+  renderRecentPath(latestRecent);
 });
 
 settingsButton.addEventListener('click', enterConfigureMode);
